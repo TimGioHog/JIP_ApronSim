@@ -11,8 +11,6 @@ large_font = pg.font.SysFont('arial', 40)
 white = (255, 255, 255)
 black = (0, 0, 0)
 klm_rgb = (0, 161, 228)
-surface_apron = pg.image.load("assets/apron.png")
-surface_737 = pg.image.load("assets/737s.png")
 
 
 class Operation:
@@ -21,6 +19,8 @@ class Operation:
         self.duration = duration
         self.dependencies = []
         self.completed = False
+        self.completion_time = None
+        self.start_time = None
         self.time_left = duration
         self.locations = []
 
@@ -55,9 +55,12 @@ class Scheduler:
     def update(self, sim, duration):
         for operation in self.operations.values():
             if operation.is_ready() and not operation.completed:
+                if operation.start_time is None:
+                    operation.start_time = sim.timer
                 operation.time_left -= duration
                 if operation.time_left <= 0:
                     operation.completed = True
+                    operation.completion_time = sim.timer
                     print(f'{operation} operation completed at time {sim.timer}!')
         if all(op.completed for op in self.operations.values()):
             self.finished = True
@@ -65,8 +68,8 @@ class Scheduler:
 
 class Simulation:
     def __init__(self):
-        self.images, self.rects = load_assets()
         self.screen = pg.display.set_mode((1920, 1080), pg.RESIZABLE, pg.HWSURFACE)
+        self.images, self.rects = load_assets()
         current_df = pd.read_excel("data.xlsx")
         self.scheduler = Scheduler(current_df)
         self.timer = 0
@@ -78,10 +81,12 @@ class Simulation:
     def draw(self):
         self.screen.fill('Black')
         self.screen.blit(self.images['apron'], self.rects['apron'])
-        if self.scheduler.operations["Parking"].completed:
-            self.screen.blit(surface_apron, (513, 17))
+        if not self.scheduler.operations["Parking"].completed:
+            self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * self.timer))  # 17 pixels per second
+        elif self.scheduler.operations["Pushback"].is_ready():
+            self.screen.blit(self.images['737s'], (513, 17 - 17 * (self.timer - self.scheduler.operations["Pushback"].start_time)))  # 17 pixels per second
         else:
-            self.screen.blit(surface_737, (513, 17))  # 17 pixels per second
+            self.screen.blit(self.images['737s'], (513, 17))
 
         operation_count = -1
         for operation in self.scheduler.operations.values():
@@ -103,9 +108,9 @@ class Simulation:
 
         # Clock rendering - Seconds
         if self.timer % 60 < 10:
-            self.screen.blit(large_font.render(f':0{self.timer % 60}', True, white), (47, 10))
+            self.screen.blit(large_font.render(f':0{int(self.timer % 60)}', True, white), (47, 10))
         else:
-            self.screen.blit(large_font.render(f':{self.timer % 60}', True, white), (47, 10))
+            self.screen.blit(large_font.render(f':{int(self.timer % 60)}', True, white), (47, 10))
 
         # Speed
         self.screen.blit(large_font.render(f'{self.speed}x', True, white), (10, 50))
@@ -132,23 +137,24 @@ class Simulation:
                     self.pause_menu = not self.pause_menu
                 elif event.unicode == " " and not self.pause_menu:
                     self.paused = not self.paused
-                elif event.unicode == "=" and self.speed <= 32:
+                elif event.unicode == "=":
                     self.speed = int(self.speed * 2)
                 elif event.unicode == "-" and self.speed >= 2:
                     self.speed = int(self.speed / 2)
 
-    def update(self):
-        adjusted_speed = int(max(1.0, self.speed / 8))
-        self.timer += adjusted_speed
-        self.scheduler.update(self, adjusted_speed)
+    def update(self, duration):
+        self.timer += duration * self.speed
+        self.scheduler.update(self, duration * self.speed)
 
     def run(self):
         pg.init()
         pg.display.set_caption("ApronSim")
         print("Running...")
         last_frame = time.perf_counter()
-        tick_start = time.perf_counter()
         running = True
+        # for image in self.images:
+        #     print(image)
+        #     self.images[image] = pg.image.load(f'assets/{image}.png').convert_alpha()
         while running:
             self.event_handler()
             self.draw()
@@ -157,9 +163,8 @@ class Simulation:
             frame_duration = current_time - last_frame
             last_frame = current_time
 
-            if current_time - tick_start >= 1 / self.speed and not self.paused and not self.pause_menu:
-                tick_start = current_time
-                self.update()
+            if not self.paused and not self.pause_menu:
+                self.update(frame_duration)
 
             self.fps = 1 / frame_duration
 
@@ -169,7 +174,7 @@ def load_assets():
     rects = {}
     for file in os.listdir('assets'):
         if file.endswith('.png'):
-            image = pg.image.load(f'assets\\{file}')
+            image = pg.image.load(f'assets\\{file}').convert_alpha()
             images[file[:-4]] = image
             rects[file[:-4]] = image.get_rect()
     return images, rects
