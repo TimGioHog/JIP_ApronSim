@@ -11,6 +11,8 @@ large_font = pg.font.SysFont('arial', 40)
 white = (255, 255, 255)
 black = (0, 0, 0)
 klm_rgb = (0, 161, 228)
+surface_apron = pg.image.load("assets/apron.png")
+surface_737 = pg.image.load("assets/737s.png")
 
 
 class Operation:
@@ -40,14 +42,14 @@ class Scheduler:
     def __init__(self, df):
         self.operations = {}
         for index, row in df.iterrows():  # for each operation:
-            operation = Operation(row[0], row[1] * 60)
-            for dep in row[2:5]:
+            operation = Operation(row.iloc[0], row.iloc[1] * 60)
+            for dep in row.iloc[2:5]:
                 if pd.notna(dep):
                     operation.add_dependency(self.operations[dep])
             for i in range(3):
-                if pd.notna(row[2*i + 5]) and pd.notna(row[2*i + 6]):
-                    operation.locations.append((row[2*i + 5], row[2*i + 6]))
-            self.operations[row[0]] = operation
+                if pd.notna(row.iloc[2 * i + 5]) and pd.notna(row.iloc[2 * i + 6]):
+                    operation.locations.append((row.iloc[2 * i + 5], row.iloc[2 * i + 6]))
+            self.operations[row.iloc[0]] = operation
         self.finished = False
 
     def update(self, sim, duration):
@@ -71,21 +73,25 @@ class Simulation:
         self.fps = 0
         self.speed = 1
         self.paused = False
+        self.pause_menu = False
 
     def draw(self):
         self.screen.fill('Black')
         self.screen.blit(self.images['apron'], self.rects['apron'])
         if self.scheduler.operations["Parking"].completed:
-            self.screen.blit(self.images['737s'], self.rects['737s'].move(513, 17))
+            self.screen.blit(surface_apron, (513, 17))
         else:
-            self.screen.blit(self.images['737s'], self.rects['737s'].move(513, 17)) # 17 pixels per second
+            self.screen.blit(surface_737, (513, 17))  # 17 pixels per second
 
+        operation_count = -1
         for operation in self.scheduler.operations.values():
             if operation.is_ready() and not operation.completed:
+                operation_count += 1
                 for i in range(len(operation.locations)):
                     pg.draw.circle(self.screen, (255, 0, 0), operation.locations[i], 10)
                     self.screen.blit(small_font.render(operation.name, True, (0, 0, 0)),
                                      (operation.locations[i][0], operation.locations[i][1] + 10))
+                self.screen.blit(small_font.render(f'{operation}', True, white), (10, 100 + operation_count*35))
 
         pg.draw.rect(self.screen, black, pg.Rect(0, 0, 100, 100))
 
@@ -107,9 +113,13 @@ class Simulation:
         # FPS Counter
         self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (1880, 10))
 
-        if self.paused:
+        if self.paused and not self.pause_menu:
             pg.draw.rect(self.screen, black, pg.Rect(816, 0, 288, 60))
             self.screen.blit(large_font.render(f'Simulation Paused', True, white), (826, 10))
+        elif self.pause_menu:
+            rect_surface = pg.Surface((288, 600), pg.SRCALPHA)
+            rect_surface.fill(pg.Color(0, 0, 0, 150))
+            self.screen.blit(rect_surface, (816, 200))
 
         pg.display.flip()
 
@@ -119,16 +129,16 @@ class Simulation:
                 pg.quit()
             elif event.type == pg.KEYUP:
                 if event.key == 27:  # Escape
-                    pg.quit()
-                elif event.unicode == " ":
+                    self.pause_menu = not self.pause_menu
+                elif event.unicode == " " and not self.pause_menu:
                     self.paused = not self.paused
-                elif event.unicode == "=" and self.speed <= 128:
+                elif event.unicode == "=" and self.speed <= 32:
                     self.speed = int(self.speed * 2)
                 elif event.unicode == "-" and self.speed >= 2:
                     self.speed = int(self.speed / 2)
 
     def update(self):
-        adjusted_speed = int(max(1, self.speed / 8))
+        adjusted_speed = int(max(1.0, self.speed / 8))
         self.timer += adjusted_speed
         self.scheduler.update(self, adjusted_speed)
 
@@ -147,7 +157,7 @@ class Simulation:
             frame_duration = current_time - last_frame
             last_frame = current_time
 
-            if current_time - tick_start >= 1 / self.speed and not self.paused:
+            if current_time - tick_start >= 1 / self.speed and not self.paused and not self.pause_menu:
                 tick_start = current_time
                 self.update()
 
@@ -166,5 +176,5 @@ def load_assets():
 
 
 if __name__ == "__main__":
-    sim = Simulation()
-    sim.run()
+    main_sim = Simulation()
+    main_sim.run()

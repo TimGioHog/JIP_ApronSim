@@ -3,8 +3,9 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/venv_3.9" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.8 (JIP_ApronSim)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.12 (JIP_ApronSim)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
