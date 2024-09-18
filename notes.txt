@@ -1,0 +1,7 @@
+
+1m = 25 pix
+1pix = 4cm
+
+737-800 width = 35.79m, 895pix
+737-800 length = 39.5m,  987pix
+aircraft image loc: 532, 33
