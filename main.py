@@ -95,6 +95,8 @@ class Simulation:
         self.button_quit = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
         self.button_restart = Button("RESTART", (820, 360), (280, 50), self.button_restart_action)
 
+        self.buttons = [self.button_resume, self.button_quit, self.button_restart]
+
     def draw(self):
         self.screen.fill('Black')
         self.screen.blit(self.images['apron'], self.rects['apron'])
@@ -178,7 +180,7 @@ class Simulation:
     def event_handler(self):
         for event in pg.event.get():
             if event.type == pg.QUIT:
-                pg.quit()
+                self.running = False
             elif event.type == pg.KEYUP:
                 if event.key == 27:  # Escape
                     self.pause_menu = not self.pause_menu
@@ -189,6 +191,12 @@ class Simulation:
                 elif event.unicode == "-" and self.speed >= 2:
                     self.speed = int(self.speed / 2)
             elif event.type == pg.MOUSEBUTTONUP or event.type == pg.MOUSEBUTTONDOWN or event.type == pg.MOUSEMOTION:
+                if event.type == pg.MOUSEMOTION:
+                    if any([button.is_hovered for button in self.buttons]):
+                        pg.mouse.set_cursor(pg.SYSTEM_CURSOR_HAND)
+                    else:
+                        pg.mouse.set_cursor(pg.SYSTEM_CURSOR_ARROW)
+
                 if self.pause_menu or self.scheduler.finished:
                     self.button_quit.handle_event(event)
                     self.button_restart.handle_event(event)
@@ -218,7 +226,7 @@ class Simulation:
             self.fps = 1 / frame_duration
 
             if self.restart:
-                print(f'\n Restarting... \n')
+                print(f'\n Restarting...')
                 self.timer = 0
                 self.speed = 1
                 self.paused = False
@@ -265,6 +273,8 @@ class Button:
             self.is_hovered = self.rect.collidepoint(event.pos)
         if event.type == pg.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
             self.callback()
+            self.is_hovered = False
+            pg.mouse.set_cursor(pg.SYSTEM_CURSOR_ARROW)
 
 
 def load_assets():
