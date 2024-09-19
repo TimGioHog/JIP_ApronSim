@@ -110,16 +110,16 @@ class Simulation:
         # Bridge rendering
         self.screen.blit(self.images['Bridge_1'], (1330, 924))
         if self.scheduler.ops["Connect_Bridge"].start_time is None or self.scheduler.ops["Remove_Bridge"].completed:
-            self.screen.blit(self.images['Bridge_3'], (1233, 896))
+            self.screen.blit(self.images['Bridge_2'], (1233, 896))
         elif self.scheduler.ops["Connect_Bridge"].completed and self.scheduler.ops["Remove_Bridge"].start_time is None:
-            self.screen.blit(self.images['Bridge_3'], (987, 854))
+            self.screen.blit(self.images['Bridge_2'], (987, 854))
         elif self.scheduler.ops["Remove_Bridge"].start_time is not None:
             removing_bridge_time = self.timer - self.scheduler.ops["Remove_Bridge"].start_time
-            self.screen.blit(self.images['Bridge_3'], (987 + (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * removing_bridge_time),
+            self.screen.blit(self.images['Bridge_2'], (987 + (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * removing_bridge_time),
                                                        854 + (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * removing_bridge_time)))
         else:
             connecting_bridge_time = self.timer - self.scheduler.ops["Connect_Bridge"].start_time
-            self.screen.blit(self.images['Bridge_3'], (1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
+            self.screen.blit(self.images['Bridge_2'], (1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
                                                        896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time)))
 
         operation_count = -1
