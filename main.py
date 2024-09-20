@@ -101,6 +101,10 @@ class Simulation:
         self.screen.fill('Black')
         self.screen.blit(self.images['apron'], self.rects['apron'])
 
+        # Hydrant-truck rendering
+        if self.scheduler.ops['Refuel'].is_ready() and not self.scheduler.ops['Refuel'].completed:
+            self.screen.blit(self.images['Hydrant_Truck'], (717, 515))
+
         # Aircraft rendering
         if not self.scheduler.ops["Parking"].completed:
             self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * self.timer))  # 17 pixels per second

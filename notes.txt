@@ -8,3 +8,4 @@ aircraft image loc: 532, 33
 
 bridge_2 tl = 987, 854
 bridge_1 tl = 1330, 924
+hydrant truck tl = 717, 515
