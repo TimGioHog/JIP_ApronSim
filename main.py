@@ -105,6 +105,11 @@ class Simulation:
         if self.scheduler.ops['Refuel'].is_ready() and not self.scheduler.ops['Refuel'].completed:
             self.screen.blit(self.images['Hydrant_Truck'], (717, 515))
 
+        # LDL rendering
+        if self.scheduler.ops['Offload_Baggage'].is_ready() and not self.scheduler.ops['Remove_LDL'].completed:
+            self.screen.blit(self.images['LDL'], (711, 719))
+            self.screen.blit(self.images['LDL'], (712, 283))
+
         # Aircraft rendering
         if not self.scheduler.ops["Parking"].completed:
             self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * self.timer))  # 17 pixels per second

@@ -6,6 +6,8 @@
 737-800 length = 39.5m,  987pix
 aircraft image loc: 532, 33
 
-bridge_2 tl = 987, 854
-bridge_1 tl = 1330, 924
-hydrant truck tl = 717, 515
+bridge_2        tl = 987, 854
+bridge_1        tl = 1330, 924
+hydrant truck   tl = 717, 515
+LDL_front       tl = 712, 719
+LDL_rear        tl = 712, 283
