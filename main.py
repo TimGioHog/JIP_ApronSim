@@ -133,15 +133,19 @@ class Simulation:
             self.screen.blit(self.images['Bridge_2'], (1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
                                                        896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time)))
 
+        # Catering rendering
+        if self.scheduler.ops['Catering'].is_ready() and not self.scheduler.ops['Catering'].completed:
+            self.screen.blit(self.images['Catering'], (760, 870))
+            self.screen.blit(self.images['Catering'], (757, 196))
+
         operation_count = -1
         for operation in self.scheduler.ops.values():
             if operation.is_ready() and not operation.completed:
                 operation_count += 1
                 for i in range(len(operation.locations)):
-                    if operation.name not in ["Parking", "Connect_Bridge", "Remove_Bridge"]:
-                        pg.draw.circle(self.screen, (255, 0, 0), operation.locations[i], 10)
-                        self.screen.blit(small_font.render(operation.name, True, (0, 0, 0)),
-                                         (operation.locations[i][0], operation.locations[i][1] + 10))
+                    pg.draw.circle(self.screen, (255, 0, 0), operation.locations[i], 10)
+                    self.screen.blit(small_font.render(operation.name, True, (0, 0, 0)),
+                                     (operation.locations[i][0], operation.locations[i][1] + 10))
                 self.screen.blit(small_font.render(f'{operation}', True, white), (10, 100 + operation_count*35))
 
         pg.draw.rect(self.screen, black, pg.Rect(0, 0, 100, 100))

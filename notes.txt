@@ -11,3 +11,5 @@ bridge_1        tl = 1330, 924
 hydrant truck   tl = 717, 515
 LDL_front       tl = 712, 719
 LDL_rear        tl = 712, 283
+Catering front  tl = 760, 870
+Catering rear   tl = 757, 196
