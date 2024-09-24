@@ -7,6 +7,7 @@ import time
 
 pg.font.init()
 small_font = pg.font.SysFont('arial', 20)
+medium_font = pg.font.SysFont('arial', 30)
 large_font = pg.font.SysFont('arial', 40)
 white = (255, 255, 255)
 black = (0, 0, 0)
@@ -49,12 +50,12 @@ class Scheduler:
         self.ops = {}
         for index, row in df.iterrows():  # for each operation:
             operation = Operation(row.iloc[0], row.iloc[1] * 60)
-            for dep in row.iloc[2:5]:
+            for dep in row.iloc[2:7]:
                 if pd.notna(dep):
                     operation.add_dependency(self.ops[dep])
-            for i in range(3):
-                if pd.notna(row.iloc[2 * i + 5]) and pd.notna(row.iloc[2 * i + 6]):
-                    operation.locations.append((row.iloc[2 * i + 5], row.iloc[2 * i + 6]))
+            for i in range(2):
+                if pd.notna(row.iloc[2 * i + 7]) and pd.notna(row.iloc[2 * i + 8]):
+                    operation.locations.append((row.iloc[2 * i + 7], row.iloc[2 * i + 8]))
             self.ops[row.iloc[0]] = operation
         self.finished = False
 
@@ -72,7 +73,7 @@ class Scheduler:
                 if operation.time_left <= 0:
                     operation.completed = True
                     operation.completion_time = sim.timer
-                    print(f'{operation} operation completed at time {sim.timer}!')
+                    print(f'{operation} operation completed at time {round(operation.completion_time)}!')
         if all(op.completed for op in self.ops.values()):
             self.finished = True
 
@@ -83,7 +84,7 @@ class Simulation:
         self.images, self.rects = load_assets()
         current_df = pd.read_excel("data.xlsx")
         self.scheduler = Scheduler(current_df)
-        self.timer = 0
+        self.timer = -self.scheduler.ops['Parking'].duration
         self.fps = 0
         self.speed = 1
         self.paused = False
@@ -106,8 +107,9 @@ class Simulation:
             self.screen.blit(self.images['Hydrant_Truck'], (717, 515))
 
         # LDL rendering
-        if self.scheduler.ops['Offload_Baggage'].is_ready() and not self.scheduler.ops['Remove_LDL'].completed:
+        if self.scheduler.ops['Connect_LDL_Front'].is_ready() and not self.scheduler.ops['Remove_LDL_Front'].completed:
             self.screen.blit(self.images['LDL'], (711, 719))
+        if self.scheduler.ops['Connect_LDL_Rear'].is_ready() and not self.scheduler.ops['Remove_LDL_Rear'].completed:
             self.screen.blit(self.images['LDL'], (712, 283))
 
         # Tug rendering
@@ -118,7 +120,7 @@ class Simulation:
 
         # Aircraft rendering
         if not self.scheduler.ops["Parking"].completed:
-            self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * self.timer))  # 17 pixels per second
+            self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * (self.timer + self.scheduler.ops['Parking'].duration)))  # 17 pixels per second
         elif self.scheduler.ops["Pushback"].is_ready():
             self.screen.blit(self.images['737s'], (513, 17 - (17 / (self.scheduler.ops["Pushback"].duration / 60)) * (self.timer - self.scheduler.ops["Pushback"].start_time)))
         else:
@@ -126,12 +128,12 @@ class Simulation:
 
         # Bridge rendering
         self.screen.blit(self.images['Bridge_1'], (1330, 924))
-        if self.scheduler.ops["Connect_Bridge"].start_time is None or self.scheduler.ops["Remove_Bridge"].completed:
+        if self.scheduler.ops["Connect_Bridge"].start_time is None or self.scheduler.ops["Flight_Closure"].completed:
             self.screen.blit(self.images['Bridge_2'], (1233, 896))
-        elif self.scheduler.ops["Connect_Bridge"].completed and self.scheduler.ops["Remove_Bridge"].start_time is None:
+        elif self.scheduler.ops["Connect_Bridge"].completed and self.scheduler.ops["Flight_Closure"].start_time is None:
             self.screen.blit(self.images['Bridge_2'], (987, 854))
-        elif self.scheduler.ops["Remove_Bridge"].start_time is not None:
-            removing_bridge_time = self.timer - self.scheduler.ops["Remove_Bridge"].start_time
+        elif self.scheduler.ops["Flight_Closure"].start_time is not None:
+            removing_bridge_time = self.timer - self.scheduler.ops["Flight_Closure"].start_time
             self.screen.blit(self.images['Bridge_2'], (987 + (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * removing_bridge_time),
                                                        854 + (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * removing_bridge_time)))
         else:
@@ -140,36 +142,50 @@ class Simulation:
                                                        896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time)))
 
         # Catering rendering
-        if self.scheduler.ops['Catering'].is_ready() and not self.scheduler.ops['Catering'].completed:
+        if self.scheduler.ops['Catering_Front'].is_ready() and not self.scheduler.ops['Catering_Front'].completed:
             self.screen.blit(self.images['Catering'], (760, 870))
+
+        if self.scheduler.ops['Catering_Rear'].is_ready() and not self.scheduler.ops['Catering_Rear'].completed:
             self.screen.blit(self.images['Catering'], (757, 196))
 
+        pg.draw.rect(self.screen, black, pg.Rect(0, 0, 200, 1080))
+
         operation_count = -1
-        for operation in self.scheduler.ops.values():
+        for i, operation in enumerate(self.scheduler.ops.values()):
+            if operation.completed:
+                self.screen.blit(small_font.render(f'{operation}', True, (100, 255, 100)), (10, 120 + i * 28))
+            elif operation.is_ready():
+                self.screen.blit(small_font.render(f'{operation}', True, (255, 255, 100)), (10, 120 + i * 28))
+            else:
+                self.screen.blit(small_font.render(f'{operation}', True, white), (10, 120 + i * 28))
+
             if operation.is_ready() and not operation.completed:
                 operation_count += 1
                 for i in range(len(operation.locations)):
                     pg.draw.circle(self.screen, (255, 0, 0), operation.locations[i], 10)
                     self.screen.blit(small_font.render(operation.name, True, (0, 0, 0)),
                                      (operation.locations[i][0], operation.locations[i][1] + 10))
-                self.screen.blit(small_font.render(f'{operation}', True, white), (10, 100 + operation_count*35))
-
-        pg.draw.rect(self.screen, black, pg.Rect(0, 0, 100, 100))
 
         # Clock rendering - Minutes
         if int(self.timer / 60) < 10:
-            self.screen.blit(large_font.render(f'0{int(self.timer / 60)}', True, white), (10, 10))
+            self.screen.blit(large_font.render(f'0{int(self.timer / 60)}', True, white), (56, 10))
         else:
-            self.screen.blit(large_font.render(f'{int(self.timer / 60)}', True, white), (10, 10))
+            self.screen.blit(large_font.render(f'{int(self.timer / 60)}', True, white), (56, 10))
 
         # Clock rendering - Seconds
-        if self.timer % 60 < 10:
-            self.screen.blit(large_font.render(f':0{int(self.timer % 60)}', True, white), (47, 10))
+        if self.timer < 0:
+            if self.timer % 60 < 50:
+                self.screen.blit(large_font.render(f':{int(60 - self.timer % 60)}', True, white), (93, 10))
+            else:
+                self.screen.blit(large_font.render(f':0{int(60 - self.timer % 60)}', True, white), (93, 10))
         else:
-            self.screen.blit(large_font.render(f':{int(self.timer % 60)}', True, white), (47, 10))
+            if self.timer % 60 < 10:
+                self.screen.blit(large_font.render(f':0{int(self.timer % 60)}', True, white), (93, 10))
+            else:
+                self.screen.blit(large_font.render(f':{int(self.timer % 60)}', True, white), (93, 10))
 
         # Speed
-        self.screen.blit(large_font.render(f'{self.speed}x', True, white), (10, 50))
+        self.screen.blit(medium_font.render(f'Speed: {self.speed}x', True, white), (10, 60))
 
         # FPS Counter
         self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (1880, 10))
@@ -246,13 +262,16 @@ class Simulation:
 
             if self.restart:
                 print(f'\n Restarting...')
-                self.timer = 0
-                self.speed = 1
-                self.paused = False
-                self.pause_menu = False
-                self.scheduler.reset()
-                self.restart = False
+                self.reset()
         pg.quit()
+
+    def reset(self):
+        self.timer = -self.scheduler.ops['Parking'].duration
+        self.speed = 1
+        self.paused = False
+        self.pause_menu = False
+        self.scheduler.reset()
+        self.restart = False
 
     def button_resume_action(self):
         if not self.scheduler.finished:
