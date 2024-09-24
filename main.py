@@ -110,6 +110,12 @@ class Simulation:
             self.screen.blit(self.images['LDL'], (711, 719))
             self.screen.blit(self.images['LDL'], (712, 283))
 
+        # Tug rendering
+        if self.scheduler.ops["Pushback"].is_ready():
+            self.screen.blit(self.images['Tug'], (909, 869 - (17 / (self.scheduler.ops["Pushback"].duration / 60)) * (self.timer - self.scheduler.ops["Pushback"].start_time)))
+        elif self.scheduler.ops["Attatch_Tug"].is_ready():
+            self.screen.blit(self.images['Tug'], (909, 869))
+
         # Aircraft rendering
         if not self.scheduler.ops["Parking"].completed:
             self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * self.timer))  # 17 pixels per second

@@ -13,3 +13,4 @@ LDL_front       tl = 712, 719
 LDL_rear        tl = 712, 283
 Catering front  tl = 760, 870
 Catering rear   tl = 757, 196
+Tug base        tl = 909, 869
