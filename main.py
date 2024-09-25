@@ -114,7 +114,7 @@ class Simulation:
 
         # Tug rendering
         if self.scheduler.ops["Pushback"].is_ready():
-            self.screen.blit(self.images['Tug'], (909, 869 - (17 / (self.scheduler.ops["Pushback"].duration / 60)) * (self.timer - self.scheduler.ops["Pushback"].start_time)))
+            self.screen.blit(self.images['Tug'], (909, 869 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (self.timer - self.scheduler.ops["Pushback"].start_time)))
         elif self.scheduler.ops["Attatch_Tug"].is_ready():
             self.screen.blit(self.images['Tug'], (909, 869))
 
@@ -122,7 +122,7 @@ class Simulation:
         if not self.scheduler.ops["Parking"].completed:
             self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * (self.timer + self.scheduler.ops['Parking'].duration)))  # 17 pixels per second
         elif self.scheduler.ops["Pushback"].is_ready():
-            self.screen.blit(self.images['737s'], (513, 17 - (17 / (self.scheduler.ops["Pushback"].duration / 60)) * (self.timer - self.scheduler.ops["Pushback"].start_time)))
+            self.screen.blit(self.images['737s'], (513, 17 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (self.timer - self.scheduler.ops["Pushback"].start_time)))
         else:
             self.screen.blit(self.images['737s'], (513, 17))
 
@@ -134,8 +134,8 @@ class Simulation:
             self.screen.blit(self.images['Bridge_2'], (987, 854))
         elif self.scheduler.ops["Flight_Closure"].start_time is not None:
             removing_bridge_time = self.timer - self.scheduler.ops["Flight_Closure"].start_time
-            self.screen.blit(self.images['Bridge_2'], (987 + (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * removing_bridge_time),
-                                                       854 + (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * removing_bridge_time)))
+            self.screen.blit(self.images['Bridge_2'], (987 + (((1233 - 987) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time),
+                                                       854 + (((896 - 854) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time)))
         else:
             connecting_bridge_time = self.timer - self.scheduler.ops["Connect_Bridge"].start_time
             self.screen.blit(self.images['Bridge_2'], (1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
