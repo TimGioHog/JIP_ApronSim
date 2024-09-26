@@ -2,6 +2,39 @@ import numpy as np
 import heapq
 
 
+def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple):
+    if type(start) == list:
+        start = (start[0], start[1])
+    service_start = True if start == (655, 1370) else False
+    service_end = True if goal == (535, 1370) else False
+
+    start = (int(start[1] / 10) + 20, int(start[0] / 10))
+    goal = (int(goal[1] / 10) + 20, int(goal[0] / 10))
+
+    if 0 > start[0] >= mesh.shape[0] or 0 > start[1] >= mesh.shape[1]:
+        raise ValueError(f'Pathfinding Error: inserted start value invalid. start = {start}')
+    if 0 > goal[0] >= mesh.shape[0] or 0 > goal[1] >= mesh.shape[1]:
+        raise ValueError(f'Pathfinding Error: inserted goal value invalid. goal = {goal}')
+
+    path = astar(mesh, start, goal)
+    smoothed_path = los_smooth_bwrd(path, mesh)
+
+    if service_end:
+        temp = smoothed_path[:-1]
+        temp.append((122, 53))
+        temp.append(smoothed_path[-1])
+        smoothed_path = los_smooth_fwrd(temp, mesh)
+    if service_start:
+        temp = [smoothed_path[0], (122, 65)]
+        temp.extend(smoothed_path[1:])
+        smoothed_path = los_smooth_fwrd(temp, mesh)
+
+    final_path = []
+    for point in smoothed_path:
+        final_path.append((point[1] * 10, (point[0] - 20) * 10))
+    return final_path
+
+
 def heuristic(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
@@ -60,47 +93,61 @@ def astar(mesh: np.ndarray, start: tuple, goal: tuple):
     return path
 
 
-def line_of_sight_smooth(path, array):
-    smooth_path = [path[0]]  # Start with the first point
-
-    for i in range(len(path) - 2):
-        if not has_obstacle(smooth_path[-1], path[i+2], array):
-            continue
-        smooth_path.append(path[i+1])
-
-    smooth_path.append(path[-1])  # Add the last point
+def los_smooth_bwrd(path, mesh):
+    smooth_path = [path[0]]  # Add start
+    current_node = 0
+    while current_node != len(path) -1:
+        for i in range(len(path) - current_node):
+            i2 = -i - 1
+            if not has_obstacle(smooth_path[-1], path[i2], mesh):
+                smooth_path.append(path[i2])
+                current_node = len(path) + i2
+                break
     return smooth_path
 
 
-# Check if there’s an obstacle between two points
+def los_smooth_fwrd(path, mesh):
+    smooth_path = [path[0]]  # Add start
+
+    for i in range(len(path) - 2):
+        if not has_obstacle(smooth_path[-1], path[i+2], mesh):  # Check if it can skip the next node, by looking if it can see the one after it
+            continue
+        smooth_path.append(path[i+1])  # if not, add the next node to the smooth path list
+
+    smooth_path.append(path[-1])  # Add goal
+    return smooth_path
+
+
 def has_obstacle(start, end, array):
-    x1, y1 = start
-    x2, y2 = end
+    y1, x1 = start
+    y2, x2 = end
 
-    # Bresenham's Line Algorithm to check if there's a straight line path
-    steep = abs(y2 - y1) > abs(x2 - x1)
+    # Bresenham's Line Algorithm
+    steep = abs(x2 - x1) > abs(y2 - y1)
+
+    # Swap x and y if steep, to make traversal simpler (swapped back when checking)
     if steep:
-        x1, y1 = y1, x1
-        x2, y2 = y2, x2
+        y1, x1 = x1, y1
+        y2, x2 = x2, y2
 
-    if x1 > x2:
-        x1, x2 = x2, x1
+    if y1 > y2:  # Always traverse left to right
         y1, y2 = y2, y1
+        x1, x2 = x2, x1
 
-    dx = x2 - x1
-    dy = abs(y2 - y1)
-    error = dx / 2
-    ystep = 1 if y1 < y2 else -1
+    dy = y2 - y1
+    dx = abs(x2 - x1)
+    error = dy / 2
+    ystep = 1 if x1 < x2 else -1
 
-    y = y1
-    for x in range(x1, x2 + 1):
+    y = x1
+    for x in range(y1, y2 + 1):
         coord = (y, x) if steep else (x, y)
         if array[coord[0], coord[1]] == 0:  # Check for obstacles
             return True
-        error -= dy
+        error -= dx
         if error < 0:
             y += ystep
-            error += dx
+            error += dy
 
     return False
 
@@ -120,5 +167,5 @@ if __name__ == "__main__":
     print(f"mesh = \n{example_array}")
     example_path = astar(example_array, example_start, example_goal)
     print("Path found:", example_path)
-    smoothed_path = line_of_sight_smooth(example_path, example_array)
-    print("Smoothed path:", smoothed_path)
+    example_smoothed_path = los_smooth_bwrd(example_path, example_array)
+    print("Smoothed path:", example_smoothed_path)

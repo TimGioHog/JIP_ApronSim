@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pygame as pg
 import time
-from pathfinding import *
+from pathfinding import smooth_astar
 
 pg.font.init()
 small_font = pg.font.SysFont('arial', 20)
@@ -75,7 +75,7 @@ class Scheduler:
                 if operation.time_left + operation.delay*60 <= 0:
                     operation.completed = True
                     operation.completion_time = sim.timer
-                    print(f'{operation} operation completed at time {round(operation.completion_time)}!')
+                    # print(f'{operation} operation completed at time {round(operation.completion_time)}!')
         if all(op.completed for op in self.ops.values()):
             self.finished = True
 
@@ -110,12 +110,18 @@ class Simulation:
         mesh_df = pd.read_excel("Base_Mesh.xlsx", header=None)
         self.mesh = mesh_df.to_numpy()
 
-        self.example_path = astar(self.mesh, (100, 85), (38, 110))
-        self.example_path = line_of_sight_smooth(self.example_path, self.mesh)
+        # self.example_path = astar(self.mesh, (100, 85), (38, 110))
+        # self.example_path = line_of_sight_smooth(self.example_path, self.mesh)
+
+        self.vehicles = []
+        self.vehicles.append(Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"], (655, 1370), (535, 1370), (765, 362), 10))
 
     def draw(self):
         self.screen.fill('Black')
         self.screen.blit(self.images['apron'], self.rects['apron'])
+
+        for vehicle in self.vehicles:
+            vehicle.draw(self.screen)
 
         # Hydrant-truck rendering
         if self.scheduler.ops['Refuel'].is_ready() and not self.scheduler.ops['Refuel'].completed:
@@ -227,24 +233,23 @@ class Simulation:
 
         if self.blit_mesh:
             for y, row in enumerate(self.mesh):
-                for x, cell in enumerate(row):
+                if 19 < y < 128:
+                    for x, cell in enumerate(row):
+                        rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
+                        if cell == 0:
+                            rect_surface.fill(pg.Color(255, 100, 100, 100))
+                        else:
+                            rect_surface.fill(pg.Color(100, 255, 100, 100))
+                        self.screen.blit(rect_surface, (x*10, (y-20)*10))
+            for vehicle in self.vehicles:
+                for i, coord in enumerate(vehicle.path):
                     rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
-                    if cell == 0:
-                        rect_surface.fill(pg.Color(255, 100, 100, 100))
-                    else:
-                        rect_surface.fill(pg.Color(100, 255, 100, 100))
-                    self.screen.blit(rect_surface, (x*10, y*10))
-
-            for i, coord in enumerate(self.example_path):
-                x = coord[1]
-                y = coord[0]
-                rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
-                rect_surface.fill(pg.Color(100, 100, 255, 150))
-                self.screen.blit(rect_surface, (x * 10, y * 10))
-                if i < len(self.example_path) - 1:
-                    start = (self.example_path[i][1] * 10 + 5, self.example_path[i][0] * 10 + 5)
-                    end = (self.example_path[i+1][1] * 10 + 5, self.example_path[i+1][0] * 10 + 5)
-                    pg.draw.line(self.screen, black, start, end, width=2)
+                    rect_surface.fill(pg.Color(100, 100, 255, 150))
+                    self.screen.blit(rect_surface, (coord[0], coord[1]))
+                    if i < len(vehicle.path) - 1:
+                        start = (vehicle.path[i][0] + 5, vehicle.path[i][1] + 5)
+                        end = (vehicle.path[i+1][0] + 5, vehicle.path[i+1][1] + 5)
+                        pg.draw.line(self.screen, black, start, end, width=2)
 
         # Paused Pop-Up
         if self.paused and not self.pause_menu:
@@ -300,8 +305,11 @@ class Simulation:
                     self.button_resume.handle_event(event)
 
     def update(self, duration):
-        self.timer += duration * self.speed
-        self.scheduler.update(self, duration * self.speed)
+        time_passed = duration * self.speed
+        self.timer += time_passed
+        self.scheduler.update(self, time_passed)
+        for vehicle in self.vehicles:
+            vehicle.update(self.mesh, time_passed)
 
     def run(self):
         pg.init()
@@ -397,6 +405,59 @@ class ButtonDelay(Button):
                 self.operation.delay += 1
             else:
                 self.operation.delay -= 1
+
+
+class Vehicle:
+    def __init__(self, name, start_op, end_op, start_loc, end_loc, goal_loc, max_speed, start_velocity=0, start_rotation=0):
+        self.name       = name
+        self.start_operation    = start_op
+        self.end_operation      = end_op
+        self.location   = [start_loc[0], start_loc[1]]
+        self.end_loc    = end_loc
+        self.goal_loc   = goal_loc
+        self.velocity   = start_velocity
+        self.max_speed  = max_speed
+        self.image      = pg.image.load(f'assets\\{name}.png').convert_alpha()
+        self.rect       = self.image.get_rect()
+        self.rotation   = start_rotation
+        self.path       = []
+        self.arrived    = False
+        self.departed   = False
+
+        # TODO: REMOVE
+        self.velocity = self.max_speed
+
+    def draw(self, screen):
+        top_left = (self.location[0] - self.rect.width / 2, self.location[1] - self.rect.height / 2)
+        screen.blit(self.image, top_left)
+
+    def update(self, mesh, time_step):
+        if self.start_operation.is_ready() and not self.arrived and self.path == []:
+            self.path = smooth_astar(mesh, self.location, self.goal_loc)
+        elif self.end_operation.completed and not self.departed and self.path == []:
+            self.path = smooth_astar(mesh, self.location, self.end_loc)
+
+        if self.path:
+            dx = self.path[1][0] - self.location[0]
+            dy = self.path[1][1] - self.location[1]
+            distance = np.sqrt(dx**2 + dy**2)
+            angle = np.arctan2(dy, dx)
+            travel_distance = time_step * self.velocity
+            tx = np.cos(angle) * travel_distance
+            ty = np.sin(angle) * travel_distance
+            self.location[0] += tx
+            self.location[1] += ty
+
+            if travel_distance >= distance:
+                self.path = self.path[1:]
+                if len(self.path) == 1:
+                    self.path = []
+                    if not self.arrived:
+                        self.location[0], self.location[1] = self.goal_loc[0], self.goal_loc[1]
+                        self.arrived = True
+                    else:
+                        self.location[0], self.location[1] = self.end_loc[0], self.end_loc[1]
+                        self.departed = True
 
 
 def load_assets():
