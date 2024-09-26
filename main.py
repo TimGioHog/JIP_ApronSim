@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pygame as pg
 import time
+from pathfinding import *
 
 pg.font.init()
 small_font = pg.font.SysFont('arial', 20)
@@ -15,7 +16,7 @@ klm_rgb = (0, 161, 228)
 
 
 class Operation:
-    def __init__(self, name, duration):
+    def __init__(self, name, duration, delay):
         self.name = name
         self.duration = duration
         self.dependencies = []
@@ -24,6 +25,7 @@ class Operation:
         self.start_time = None
         self.time_left = duration
         self.locations = []
+        self.delay = delay
 
     def reset(self):
         self.completed = False
@@ -49,7 +51,7 @@ class Scheduler:
     def __init__(self, df):
         self.ops = {}
         for index, row in df.iterrows():  # for each operation:
-            operation = Operation(row.iloc[0], row.iloc[1] * 60)
+            operation = Operation(row.iloc[0], row.iloc[1] * 60, row.iloc[11])
             for dep in row.iloc[2:7]:
                 if pd.notna(dep):
                     operation.add_dependency(self.ops[dep])
@@ -70,7 +72,7 @@ class Scheduler:
                 if operation.start_time is None:
                     operation.start_time = sim.timer
                 operation.time_left -= duration
-                if operation.time_left <= 0:
+                if operation.time_left + operation.delay*60 <= 0:
                     operation.completed = True
                     operation.completion_time = sim.timer
                     print(f'{operation} operation completed at time {round(operation.completion_time)}!')
@@ -91,12 +93,25 @@ class Simulation:
         self.pause_menu = False
         self.running = True
         self.restart = False
+        self.blit_mesh = False
 
         self.button_resume = Button("RESUME", (820, 280), (280, 50), self.button_resume_action)
         self.button_quit = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
         self.button_restart = Button("RESTART", (820, 360), (280, 50), self.button_restart_action)
+        self.button_reset_delays = Button("Reset", (200, 95), (45, 20), self.button_reset_delays_action, font_size=24)
 
-        self.buttons = [self.button_resume, self.button_quit, self.button_restart]
+        self.delay_buttons = []
+        for i, operation in enumerate(self.scheduler.ops.values()):
+            self.delay_buttons.append(ButtonDelay("-", (200, 122 + i * 28), (20, 20), operation, font_size=20))
+            self.delay_buttons.append(ButtonDelay("+", (225, 122 + i * 28), (20, 20), operation, font_size=20))
+        self.buttons = [self.button_resume, self.button_quit, self.button_restart, self.button_reset_delays]
+        self.buttons.extend(self.delay_buttons)
+
+        mesh_df = pd.read_excel("Base_Mesh.xlsx", header=None)
+        self.mesh = mesh_df.to_numpy()
+
+        self.example_path = astar(self.mesh, (100, 85), (38, 110))
+        self.example_path = line_of_sight_smooth(self.example_path, self.mesh)
 
     def draw(self):
         self.screen.fill('Black')
@@ -120,7 +135,7 @@ class Simulation:
 
         # Aircraft rendering
         if not self.scheduler.ops["Parking"].completed:
-            self.screen.blit(self.images['737s'], (513, 17 - 1020 + 17 * (self.timer + self.scheduler.ops['Parking'].duration)))  # 17 pixels per second
+            self.screen.blit(self.images['737s'], (513, min(17 - 1020 + 17 * (self.timer + self.scheduler.ops['Parking'].duration), 17)))  # 17 pixels per second
         elif self.scheduler.ops["Pushback"].is_ready():
             self.screen.blit(self.images['737s'], (513, 17 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (self.timer - self.scheduler.ops["Pushback"].start_time)))
         else:
@@ -134,12 +149,12 @@ class Simulation:
             self.screen.blit(self.images['Bridge_2'], (987, 854))
         elif self.scheduler.ops["Flight_Closure"].start_time is not None:
             removing_bridge_time = self.timer - self.scheduler.ops["Flight_Closure"].start_time
-            self.screen.blit(self.images['Bridge_2'], (987 + (((1233 - 987) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time),
-                                                       854 + (((896 - 854) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time)))
+            self.screen.blit(self.images['Bridge_2'], (min(987 + (((1233 - 987) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time), 1233),
+                                                       min(854 + (((896 - 854) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time), 896)))
         else:
             connecting_bridge_time = self.timer - self.scheduler.ops["Connect_Bridge"].start_time
-            self.screen.blit(self.images['Bridge_2'], (1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
-                                                       896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time)))
+            self.screen.blit(self.images['Bridge_2'], (max(1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time), 987),
+                                                       max(896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time), 854)))
 
         # Catering rendering
         if self.scheduler.ops['Catering_Front'].is_ready() and not self.scheduler.ops['Catering_Front'].completed:
@@ -148,36 +163,56 @@ class Simulation:
         if self.scheduler.ops['Catering_Rear'].is_ready() and not self.scheduler.ops['Catering_Rear'].completed:
             self.screen.blit(self.images['Catering'], (757, 196))
 
-        pg.draw.rect(self.screen, black, pg.Rect(0, 0, 200, 1080))
+        rect_surface = pg.Surface((250, 1080), pg.SRCALPHA)
+        rect_surface.fill(pg.Color(0, 0, 0, 150))
+        self.screen.blit(rect_surface, (0, 0))
+        # pg.draw.rect(self.screen, black, pg.Rect(0, 0, 200, 1080))
 
+        # Operations list + red dots rendering
         operation_count = -1
         for i, operation in enumerate(self.scheduler.ops.values()):
+            string = operation.name.replace('_', ' ')
             if operation.completed:
-                self.screen.blit(small_font.render(f'{operation}', True, (100, 255, 100)), (10, 120 + i * 28))
+                colour = (100, 255, 100)
+            elif operation.delay > 0:
+                colour = (255, 100, 100)
             elif operation.is_ready():
-                self.screen.blit(small_font.render(f'{operation}', True, (255, 255, 100)), (10, 120 + i * 28))
+                colour = (255, 255, 100)
             else:
-                self.screen.blit(small_font.render(f'{operation}', True, white), (10, 120 + i * 28))
+                colour = white
+            self.screen.blit(small_font.render(string, True, colour), (10, 120 + i * 28))
 
+            # Delay
+            self.screen.blit(small_font.render(str(operation.delay), True, colour), (175, 120 + i * 28))
+
+            # Render operation on vop circle + name
             if operation.is_ready() and not operation.completed:
                 operation_count += 1
                 for i in range(len(operation.locations)):
                     pg.draw.circle(self.screen, (255, 0, 0), operation.locations[i], 10)
-                    self.screen.blit(small_font.render(operation.name, True, (0, 0, 0)),
+                    self.screen.blit(small_font.render(string, True, (0, 0, 0)),
                                      (operation.locations[i][0], operation.locations[i][1] + 10))
+
+        # Delay buttons
+        for button in self.delay_buttons:
+            button.draw(self.screen)
+        self.button_reset_delays.draw(self.screen)
 
         # Clock rendering - Minutes
         if int(self.timer / 60) < 10:
-            self.screen.blit(large_font.render(f'0{int(self.timer / 60)}', True, white), (56, 10))
+            if self.timer < 0:
+                self.screen.blit(large_font.render(f'-0{int(self.timer / 60)}', True, white), (45, 10))
+            else:
+                self.screen.blit(large_font.render(f'0{int(self.timer / 60)}', True, white), (56, 10))
         else:
             self.screen.blit(large_font.render(f'{int(self.timer / 60)}', True, white), (56, 10))
 
         # Clock rendering - Seconds
         if self.timer < 0:
-            if self.timer % 60 < 50:
-                self.screen.blit(large_font.render(f':{int(60 - self.timer % 60)}', True, white), (93, 10))
+            if self.timer % 60 <= 51:
+                self.screen.blit(large_font.render(f':{int(61 - self.timer % 60)}', True, white), (93, 10))
             else:
-                self.screen.blit(large_font.render(f':0{int(60 - self.timer % 60)}', True, white), (93, 10))
+                self.screen.blit(large_font.render(f':0{int(61 - self.timer % 60)}', True, white), (93, 10))
         else:
             if self.timer % 60 < 10:
                 self.screen.blit(large_font.render(f':0{int(self.timer % 60)}', True, white), (93, 10))
@@ -189,6 +224,27 @@ class Simulation:
 
         # FPS Counter
         self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (1880, 10))
+
+        if self.blit_mesh:
+            for y, row in enumerate(self.mesh):
+                for x, cell in enumerate(row):
+                    rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
+                    if cell == 0:
+                        rect_surface.fill(pg.Color(255, 100, 100, 100))
+                    else:
+                        rect_surface.fill(pg.Color(100, 255, 100, 100))
+                    self.screen.blit(rect_surface, (x*10, y*10))
+
+            for i, coord in enumerate(self.example_path):
+                x = coord[1]
+                y = coord[0]
+                rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
+                rect_surface.fill(pg.Color(100, 100, 255, 150))
+                self.screen.blit(rect_surface, (x * 10, y * 10))
+                if i < len(self.example_path) - 1:
+                    start = (self.example_path[i][1] * 10 + 5, self.example_path[i][0] * 10 + 5)
+                    end = (self.example_path[i+1][1] * 10 + 5, self.example_path[i+1][0] * 10 + 5)
+                    pg.draw.line(self.screen, black, start, end, width=2)
 
         # Paused Pop-Up
         if self.paused and not self.pause_menu:
@@ -225,12 +281,18 @@ class Simulation:
                     self.speed = int(self.speed * 2)
                 elif event.unicode == "-" and self.speed >= 2:
                     self.speed = int(self.speed / 2)
+                elif event.unicode == "m":
+                    self.blit_mesh = not self.blit_mesh
             elif event.type == pg.MOUSEBUTTONUP or event.type == pg.MOUSEBUTTONDOWN or event.type == pg.MOUSEMOTION:
                 if event.type == pg.MOUSEMOTION:
                     if any([button.is_hovered for button in self.buttons]):
                         pg.mouse.set_cursor(pg.SYSTEM_CURSOR_HAND)
                     else:
                         pg.mouse.set_cursor(pg.SYSTEM_CURSOR_ARROW)
+
+                for button in self.delay_buttons:
+                    button.handle_event(event)
+                self.button_reset_delays.handle_event(event)
 
                 if self.pause_menu or self.scheduler.finished:
                     self.button_quit.handle_event(event)
@@ -267,7 +329,6 @@ class Simulation:
 
     def reset(self):
         self.timer = -self.scheduler.ops['Parking'].duration
-        self.speed = 1
         self.paused = False
         self.pause_menu = False
         self.scheduler.reset()
@@ -281,7 +342,12 @@ class Simulation:
         self.restart = True
 
     def button_quit_action(self):
+        print('Quitting...!')
         self.running = False
+
+    def button_reset_delays_action(self):
+        for operation in self.scheduler.ops.values():
+            operation.delay = 0
 
 
 class Button:
@@ -296,6 +362,9 @@ class Button:
         self.font = pg.font.Font(None, font_size)
         self.is_hovered = False
         self.text_pos = (self.rect.x + size[0]/2 - self.font.size(text)[0]/2, self.rect.y + size[1]/2 - self.font.size(text)[1]/2)
+
+    def __repr__(self):
+        return f'{self.text} Button'
 
     def draw(self, screen):
         # Change color on hover
@@ -313,6 +382,21 @@ class Button:
             self.callback()
             self.is_hovered = False
             pg.mouse.set_cursor(pg.SYSTEM_CURSOR_ARROW)
+
+
+class ButtonDelay(Button):
+    def __init__(self, text, pos, size, op_id, color=(200, 200, 200), hover_color=klm_rgb, font_size=40):
+        super().__init__(text, pos, size, callback=None, color=(200, 200, 200), hover_color=klm_rgb, font_size=40)
+        self.operation = op_id
+
+    def handle_event(self, event):
+        if event.type == pg.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
+        if event.type == pg.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
+            if self.text == '+':
+                self.operation.delay += 1
+            else:
+                self.operation.delay -= 1
 
 
 def load_assets():

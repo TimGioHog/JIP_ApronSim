@@ -4,8 +4,8 @@
 
 737-800 width = 35.79m, 895pix
 737-800 length = 39.5m,  987pix
-aircraft image loc: 532, 33
 
+aircraft        tl = 513, 17
 bridge_2        tl = 987, 854
 bridge_1        tl = 1330, 924
 hydrant truck   tl = 717, 515
@@ -14,3 +14,13 @@ LDL_rear        tl = 712, 283
 Catering front  tl = 760, 870
 Catering rear   tl = 757, 196
 Tug base        tl = 909, 869
+
+Inaccuracy (No pathing):
+16x     =
+32x     = 2s
+64x     = 4s
+128x    = 6s
+256x    = 16s
+512x    = 23s
+1024x   = 52s
+2048x   = 84s
