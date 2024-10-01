@@ -93,7 +93,9 @@ class Simulation:
         self.pause_menu = False
         self.running = True
         self.restart = False
+        self.blit_paths = False
         self.blit_mesh = False
+        self.blit_coord = False
 
         self.button_resume = Button("RESUME", (820, 280), (280, 50), self.button_resume_action)
         self.button_quit = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
@@ -107,11 +109,22 @@ class Simulation:
         self.buttons = [self.button_resume, self.button_quit, self.button_restart, self.button_reset_delays]
         self.buttons.extend(self.delay_buttons)
 
-        mesh_df = pd.read_excel("Base_Mesh.xlsx", header=None)
+        mesh_df = pd.read_excel("Mesh_LDL.xlsx", header=None)
         self.mesh = mesh_df.to_numpy()
 
         self.vehicles = []
         self.create_vehicles()
+
+        self.mesh_surface = pg.Surface((1920, 1080), pg.SRCALPHA)
+        for y, row in enumerate(self.mesh):
+            if 19 < y < 128:
+                for x, cell in enumerate(row):
+                    rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
+                    if cell == 0:
+                        rect_surface.fill(pg.Color(255, 100, 100, 100))
+                    else:
+                        rect_surface.fill(pg.Color(100, 255, 100, 100))
+                    self.mesh_surface.blit(rect_surface, (x * 10, (y - 20) * 10))
 
     def draw(self):
         self.screen.fill('Black')
@@ -121,14 +134,14 @@ class Simulation:
             vehicle.draw(self.screen)
 
         # Hydrant-truck rendering
-        if self.scheduler.ops['Refuel'].is_ready() and not self.scheduler.ops['Refuel'].completed:
-            self.screen.blit(self.images['Hydrant_Truck'], (717, 515))
+        # if self.scheduler.ops['Refuel'].is_ready() and not self.scheduler.ops['Refuel'].completed:
+        #     self.screen.blit(self.images['Hydrant_Truck'], (717, 515))
 
-        # LDL rendering
-        if self.scheduler.ops['Connect_LDL_Front'].is_ready() and not self.scheduler.ops['Remove_LDL_Front'].completed:
-            self.screen.blit(self.images['LDL'], (711, 719))
-        if self.scheduler.ops['Connect_LDL_Rear'].is_ready() and not self.scheduler.ops['Remove_LDL_Rear'].completed:
-            self.screen.blit(self.images['LDL'], (712, 283))
+        # # LDL rendering
+        # if self.scheduler.ops['Connect_LDL_Front'].is_ready() and not self.scheduler.ops['Remove_LDL_Front'].completed:
+        #     self.screen.blit(self.images['LDL'], (711, 719))
+        # if self.scheduler.ops['Connect_LDL_Rear'].is_ready() and not self.scheduler.ops['Remove_LDL_Rear'].completed:
+        #     self.screen.blit(self.images['LDL'], (712, 283))
 
         # Tug rendering
         if self.scheduler.ops["Pushback"].is_ready():
@@ -236,16 +249,7 @@ class Simulation:
         self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (1880, 10))
 
         # Pathfinding overlay
-        if self.blit_mesh:
-            for y, row in enumerate(self.mesh):
-                if 19 < y < 128:
-                    for x, cell in enumerate(row):
-                        rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
-                        if cell == 0:
-                            rect_surface.fill(pg.Color(255, 100, 100, 100))
-                        else:
-                            rect_surface.fill(pg.Color(100, 255, 100, 100))
-                        self.screen.blit(rect_surface, (x * 10, (y - 20) * 10))
+        if self.blit_paths:
             for vehicle in self.vehicles:
                 for i, coord in enumerate(vehicle.path):
                     rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
@@ -257,6 +261,16 @@ class Simulation:
                         pg.draw.line(self.screen, black, start, end, width=2)
 
                     pg.draw.line(self.screen, (100, 100, 255), vehicle.location, vehicle.path[0], width=2)
+
+        # Mesh overlay
+        if self.blit_mesh:
+            self.screen.blit(self.mesh_surface, (0, 0))
+
+        # Coord debugging
+        if self.blit_coord:
+            coords = pg.mouse.get_pos()
+            self.screen.blit(small_font.render(str(coords), True, white), (coords[0] + 5, coords[1] + 5))
+            self.screen.blit(small_font.render(str((int(coords[1] / 10) + 20, int(coords[0] / 10))), True, white), (coords[0] + 5, coords[1] + 25))
 
         # Paused Pop-Up
         if self.paused and not self.pause_menu:
@@ -295,8 +309,12 @@ class Simulation:
                     self.speed = int(self.speed * 2)
                 elif event.unicode == "-" and self.speed >= 2:
                     self.speed = int(self.speed / 2)
+                elif event.unicode == "p":
+                    self.blit_paths = not self.blit_paths
                 elif event.unicode == "m":
                     self.blit_mesh = not self.blit_mesh
+                elif event.unicode == "c":
+                    self.blit_coord = not self.blit_coord
             elif event.type == pg.MOUSEBUTTONUP or event.type == pg.MOUSEBUTTONDOWN or event.type == pg.MOUSEMOTION:
                 if event.type == pg.MOUSEMOTION:
                     if any([button.is_hovered for button in self.buttons]):
@@ -318,7 +336,7 @@ class Simulation:
         self.timer += time_passed
         self.scheduler.update(self, time_passed)
         for vehicle in self.vehicles:
-            vehicle.update(self.mesh, time_passed)
+            vehicle.update(time_passed)
 
     def run(self):
         pg.init()
@@ -370,11 +388,17 @@ class Simulation:
     def create_vehicles(self):
         self.vehicles = []
         # self.vehicles.append(
-        #     Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
-        #             (655, 1370), (535, 1370), (765, 362), 10))
+        #     Vehicle('Hydrant_Truck', self.scheduler.ops["Chocks_Front"], self.scheduler.ops["Refuel_Finalising"],
+        #             (1300, 600), (535, 1370), (765, 362), 3, start_rotation=0))
         self.vehicles.append(
-            Vehicle('Hydrant_Truck', self.scheduler.ops["Parking"], self.scheduler.ops["Refuel_Finalising"],
-                    (1300, 600), (535, 1370), (765, 362), 3, start_rotation=0))
+            Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
+                    (655, 1370), (535, 1370), (765, 362), 2))
+        self.vehicles.append(
+            Vehicle('LDL', self.scheduler.ops["Connect_LDL_Rear"], self.scheduler.ops["Remove_LDL_Rear"],
+                    (655, 1370), (535, 1370), (820, 320), 2))
+        self.vehicles.append(
+            Vehicle('LDL', self.scheduler.ops["Connect_LDL_Front"], self.scheduler.ops["Remove_LDL_Front"],
+                    (655, 1370), (535, 1370), (820, 756), 2))
 
 
 class Button:
@@ -446,6 +470,13 @@ class Vehicle:
         self.arrived = False
         self.departed = False
 
+        if name == 'Hydrant_Truck':
+            mesh_df = pd.read_excel("Base_Mesh_4.xlsx", header=None)
+            self.mesh = mesh_df.to_numpy()
+        elif name == 'LDL':
+            mesh_df = pd.read_excel("Mesh_LDL.xlsx", header=None)
+            self.mesh = mesh_df.to_numpy()
+
     def draw(self, screen):
         rect_surface = pg.Surface((self.rect.width, self.rect.height), pg.SRCALPHA)
         rect_surface.blit(self.image, (0, 0))
@@ -453,11 +484,13 @@ class Vehicle:
         rotated_rect = rotated_surface.get_rect(center=(self.location[0], self.location[1]))
         screen.blit(rotated_surface, rotated_rect.topleft)
 
-    def update(self, mesh, time_step):
+    def update(self, time_step):
         if self.start_operation.is_ready() and not self.arrived and self.path == []:
-            self.path = smooth_astar(mesh, self.location, self.goal_loc)
+            self.path = smooth_astar(self.mesh, self.location, self.goal_loc)
+            print(f'path found for {self.name}: {self.path}')
         elif self.end_operation.completed and not self.departed and self.path == []:
-            self.path = smooth_astar(mesh, self.location, self.end_loc)
+            self.path = smooth_astar(self.mesh, self.location, self.end_loc)
+            print(f'path found for {self.name}: {self.path}')
 
         if self.path:
             dx = self.path[0][0] - self.location[0]
@@ -472,11 +505,9 @@ class Vehicle:
             elif angle_diff > 180:
                 angle_diff -= 360
 
-            steering_factor = min(1, self.speed / 3) ** 3
+            steering_factor = min(1, self.speed / 3) ** 2
             steering = np.clip(10 * angle_diff * steering_factor * time_step, -30 * time_step, 30 * time_step)
             self.rotation += steering
-            print(f'self.speed = {self.speed}')
-            print(f'steering = {steering}')
 
             dist_goal = np.sqrt((self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
             if dist_goal < 200:
@@ -493,9 +524,9 @@ class Vehicle:
             self.location[0] += tx
             self.location[1] += ty
 
-            if distance < 50 and len(self.path) > 1:  # TODO: make better, preferably when it "crosses" it, so also when it moves past it too far on the left or right
+            if distance < 60 and len(self.path) > 1:  # TODO: make better, preferably when it "crosses" it, so also when it moves past it too far on the left or right
                 self.path = self.path[1:]
-            elif dist_goal < 3:
+            elif dist_goal < 10:
                 self.path = []
                 if not self.arrived:
                     self.location[0], self.location[1] = self.goal_loc[0], self.goal_loc[1]
