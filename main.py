@@ -110,13 +110,8 @@ class Simulation:
         mesh_df = pd.read_excel("Base_Mesh.xlsx", header=None)
         self.mesh = mesh_df.to_numpy()
 
-        # self.example_path = astar(self.mesh, (100, 85), (38, 110))
-        # self.example_path = line_of_sight_smooth(self.example_path, self.mesh)
-
         self.vehicles = []
-        self.vehicles.append(
-            Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
-                    (655, 1370), (535, 1370), (765, 362), 10))
+        self.create_vehicles()
 
     def draw(self):
         self.screen.fill('Black')
@@ -138,17 +133,17 @@ class Simulation:
         # Tug rendering
         if self.scheduler.ops["Pushback"].is_ready():
             self.screen.blit(self.images['Tug'], (909, 869 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (
-                        self.timer - self.scheduler.ops["Pushback"].start_time)))
+                    self.timer - self.scheduler.ops["Pushback"].start_time)))
         elif self.scheduler.ops["Attatch_Tug"].is_ready():
             self.screen.blit(self.images['Tug'], (909, 869))
 
         # Aircraft rendering
         if not self.scheduler.ops["Parking"].completed:
             self.screen.blit(self.images['737s'], (513, min(17 - 1020 + 17 * (
-                        self.timer + self.scheduler.ops['Parking'].duration), 17)))  # 17 pixels per second
+                    self.timer + self.scheduler.ops['Parking'].duration), 17)))  # 17 pixels per second
         elif self.scheduler.ops["Pushback"].is_ready():
             self.screen.blit(self.images['737s'], (513, 17 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (
-                        self.timer - self.scheduler.ops["Pushback"].start_time)))
+                    self.timer - self.scheduler.ops["Pushback"].start_time)))
         else:
             self.screen.blit(self.images['737s'], (513, 17))
 
@@ -161,13 +156,16 @@ class Simulation:
         elif self.scheduler.ops["Flight_Closure"].start_time is not None:
             removing_bridge_time = self.timer - self.scheduler.ops["Flight_Closure"].start_time
             self.screen.blit(self.images['Bridge_2'], (
-            min(987 + (((1233 - 987) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time), 1233),
-            min(854 + (((896 - 854) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time), 896)))
+                min(987 + (((1233 - 987) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time),
+                    1233),
+                min(854 + (((896 - 854) / self.scheduler.ops["Flight_Closure"].duration) * removing_bridge_time), 896)))
         else:
             connecting_bridge_time = self.timer - self.scheduler.ops["Connect_Bridge"].start_time
             self.screen.blit(self.images['Bridge_2'], (
-            max(1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time), 987),
-            max(896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time), 854)))
+                max(1233 - (((1233 - 987) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
+                    987),
+                max(896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
+                    854)))
 
         # Catering rendering
         if self.scheduler.ops['Catering_Front'].is_ready() and not self.scheduler.ops['Catering_Front'].completed:
@@ -179,7 +177,6 @@ class Simulation:
         rect_surface = pg.Surface((250, 1080), pg.SRCALPHA)
         rect_surface.fill(pg.Color(0, 0, 0, 150))
         self.screen.blit(rect_surface, (0, 0))
-        # pg.draw.rect(self.screen, black, pg.Rect(0, 0, 200, 1080))
 
         # Operations list + red dots rendering
         operation_count = -1
@@ -238,6 +235,7 @@ class Simulation:
         # FPS Counter
         self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (1880, 10))
 
+        # Pathfinding overlay
         if self.blit_mesh:
             for y, row in enumerate(self.mesh):
                 if 19 < y < 128:
@@ -252,11 +250,13 @@ class Simulation:
                 for i, coord in enumerate(vehicle.path):
                     rect_surface = pg.Surface((10, 10), pg.SRCALPHA)
                     rect_surface.fill(pg.Color(100, 100, 255, 150))
-                    self.screen.blit(rect_surface, (coord[0], coord[1]))
+                    self.screen.blit(rect_surface, (coord[0] - 5, coord[1] - 5))
                     if i < len(vehicle.path) - 1:
-                        start = (vehicle.path[i][0] + 5, vehicle.path[i][1] + 5)
-                        end = (vehicle.path[i + 1][0] + 5, vehicle.path[i + 1][1] + 5)
+                        start = (vehicle.path[i][0], vehicle.path[i][1])
+                        end = (vehicle.path[i + 1][0], vehicle.path[i + 1][1])
                         pg.draw.line(self.screen, black, start, end, width=2)
+
+                    pg.draw.line(self.screen, (100, 100, 255), vehicle.location, vehicle.path[0], width=2)
 
         # Paused Pop-Up
         if self.paused and not self.pause_menu:
@@ -349,6 +349,7 @@ class Simulation:
         self.paused = False
         self.pause_menu = False
         self.scheduler.reset()
+        self.create_vehicles()
         self.restart = False
 
     def button_resume_action(self):
@@ -365,6 +366,15 @@ class Simulation:
     def button_reset_delays_action(self):
         for operation in self.scheduler.ops.values():
             operation.delay = 0
+
+    def create_vehicles(self):
+        self.vehicles = []
+        # self.vehicles.append(
+        #     Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
+        #             (655, 1370), (535, 1370), (765, 362), 10))
+        self.vehicles.append(
+            Vehicle('Hydrant_Truck', self.scheduler.ops["Parking"], self.scheduler.ops["Refuel_Finalising"],
+                    (1300, 600), (535, 1370), (765, 362), 3, start_rotation=0))
 
 
 class Button:
@@ -419,15 +429,16 @@ class ButtonDelay(Button):
 
 class Vehicle:
     def __init__(self, name, start_op, end_op, start_loc, end_loc, goal_loc, max_speed, start_velocity=0,
-                 start_rotation=0):
+                 start_rotation=-90, acceleration=1):
         self.name = name
         self.start_operation = start_op
         self.end_operation = end_op
         self.location = [start_loc[0], start_loc[1]]
         self.end_loc = end_loc
         self.goal_loc = goal_loc
-        self.velocity = start_velocity
+        self.speed = start_velocity
         self.max_speed = max_speed
+        self.acceleration = acceleration
         self.image = pg.image.load(f'assets\\{name}.png').convert_alpha()
         self.rect = self.image.get_rect()
         self.rotation = start_rotation
@@ -435,13 +446,10 @@ class Vehicle:
         self.arrived = False
         self.departed = False
 
-        # TODO: REMOVE
-        self.velocity = self.max_speed
-
     def draw(self, screen):
         rect_surface = pg.Surface((self.rect.width, self.rect.height), pg.SRCALPHA)
         rect_surface.blit(self.image, (0, 0))
-        rotated_surface = pg.transform.rotate(rect_surface, np.rad2deg(-self.rotation) + 90)
+        rotated_surface = pg.transform.rotate(rect_surface, -self.rotation)
         rotated_rect = rotated_surface.get_rect(center=(self.location[0], self.location[1]))
         screen.blit(rotated_surface, rotated_rect.topleft)
 
@@ -452,27 +460,49 @@ class Vehicle:
             self.path = smooth_astar(mesh, self.location, self.end_loc)
 
         if self.path:
-            dx = self.path[1][0] - self.location[0]
-            dy = self.path[1][1] - self.location[1]
+            dx = self.path[0][0] - self.location[0]
+            dy = self.path[0][1] - self.location[1]
             distance = np.sqrt(dx ** 2 + dy ** 2)
-            angle = np.arctan2(dy, dx)
-            travel_distance = time_step * self.velocity
-            tx = np.cos(angle) * travel_distance
-            ty = np.sin(angle) * travel_distance
-            self.rotation = angle
+            angle = np.rad2deg(np.arctan2(dy, dx))
+            travel_distance = time_step * self.speed * 25  # 25 pixels per meter
+
+            angle_diff = angle - self.rotation
+            if angle_diff < -180:
+                angle_diff += 360
+            elif angle_diff > 180:
+                angle_diff -= 360
+
+            steering_factor = min(1, self.speed / 3) ** 3
+            steering = np.clip(10 * angle_diff * steering_factor * time_step, -30 * time_step, 30 * time_step)
+            self.rotation += steering
+            print(f'self.speed = {self.speed}')
+            print(f'steering = {steering}')
+
+            dist_goal = np.sqrt((self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
+            if dist_goal < 200:
+                brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
+                self.speed = min(self.speed, brake_speed)
+            else:
+                if self.speed + self.acceleration * time_step < self.max_speed:
+                    self.speed += self.acceleration * time_step
+                else:
+                    self.speed = self.max_speed
+
+            tx = np.cos(np.deg2rad(self.rotation)) * travel_distance
+            ty = np.sin(np.deg2rad(self.rotation)) * travel_distance
             self.location[0] += tx
             self.location[1] += ty
 
-            if travel_distance >= distance:
+            if distance < 50 and len(self.path) > 1:  # TODO: make better, preferably when it "crosses" it, so also when it moves past it too far on the left or right
                 self.path = self.path[1:]
-                if len(self.path) == 1:
-                    self.path = []
-                    if not self.arrived:
-                        self.location[0], self.location[1] = self.goal_loc[0], self.goal_loc[1]
-                        self.arrived = True
-                    else:
-                        self.location[0], self.location[1] = self.end_loc[0], self.end_loc[1]
-                        self.departed = True
+            elif dist_goal < 3:
+                self.path = []
+                if not self.arrived:
+                    self.location[0], self.location[1] = self.goal_loc[0], self.goal_loc[1]
+                    self.arrived = True
+                else:
+                    self.location[0], self.location[1] = self.end_loc[0], self.end_loc[1]
+                    self.departed = True
 
 
 def load_assets():

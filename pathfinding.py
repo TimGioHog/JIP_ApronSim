@@ -36,8 +36,8 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple):
 
     final_path = []
     for point in smoothed_path:
-        final_path.append((point[1] * 10, (point[0] - 20) * 10))
-    return final_path
+        final_path.append((point[1] * 10 + 5, (point[0] - 20) * 10 + 5))
+    return final_path[1:]
 
 
 def heuristic(a, b):
