@@ -3,10 +3,20 @@ import heapq
 
 
 def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple):
-    if type(start) == list:
+    if type(start) is list:
         start = (start[0], start[1])
-    service_start = True if start == (655, 1370) else False
-    service_end = True if goal == (535, 1370) else False
+
+    if start == (655, 1370):
+        service_start = True
+        start = (655, 1020)
+    else:
+        service_start = False
+
+    if goal == (535, 1370):
+        service_end = True
+        goal = (535, 1020)
+    else:
+        service_end = False
 
     start = (int(start[1] / 10) + 20, int(start[0] / 10))
     goal = (int(goal[1] / 10) + 20, int(goal[0] / 10))
@@ -20,14 +30,9 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple):
     smoothed_path = los_smooth_bwrd(path, mesh)
 
     if service_end:
-        temp = smoothed_path[:-1]
-        temp.append((122, 53))
-        temp.append(smoothed_path[-1])
-        smoothed_path = los_smooth_fwrd(temp, mesh)
+        smoothed_path.append((157, 53))
     if service_start:
-        temp = [smoothed_path[0], (122, 65)]
-        temp.extend(smoothed_path[1:])
-        smoothed_path = los_smooth_fwrd(temp, mesh)
+        smoothed_path.insert(0, (157, 65))
 
     final_path = []
     for point in smoothed_path:
@@ -42,7 +47,7 @@ def heuristic(a, b):
 def astar(mesh: np.ndarray, start: tuple, goal: tuple):
     """
     :param mesh: np.array with 1s and 0s, where 0s are walls
-    :type mesh: np.array
+    :type mesh: np.ndarray
     :param start: (y, x)
     :type start: tuple
     :param goal: (y, x)
@@ -96,7 +101,7 @@ def astar(mesh: np.ndarray, start: tuple, goal: tuple):
 def los_smooth_bwrd(path, mesh):
     smooth_path = [path[0]]  # Add start
     current_node = 0
-    while current_node != len(path) -1:
+    while current_node != len(path) - 1:
         for i in range(len(path) - current_node):
             i2 = -i - 1
             if not has_obstacle(smooth_path[-1], path[i2], mesh):
@@ -110,9 +115,10 @@ def los_smooth_fwrd(path, mesh):
     smooth_path = [path[0]]  # Add start
 
     for i in range(len(path) - 2):
-        if not has_obstacle(smooth_path[-1], path[i+2], mesh):  # Check if it can skip the next node, by looking if it can see the one after it
+        if not has_obstacle(smooth_path[-1], path[i + 2],
+                            mesh):  # Check if it can skip the next node, by looking if it can see the one after it
             continue
-        smooth_path.append(path[i+1])  # if not, add the next node to the smooth path list
+        smooth_path.append(path[i + 1])  # if not, add the next node to the smooth path list
 
     smooth_path.append(path[-1])  # Add goal
     return smooth_path
