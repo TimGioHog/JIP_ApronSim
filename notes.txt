@@ -17,6 +17,11 @@ Tug base        tl = 909, 869
 service road entrance = (655, 1020)
 service road exit     = (535, 1020)
 
+0deg = right
+90deg = down
+-90deg = up
++-180 = left
+
 Inaccuracy (No pathing):
 16x     =
 32x     = 2s
