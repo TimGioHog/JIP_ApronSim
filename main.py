@@ -1,3 +1,4 @@
+import math
 import os
 
 import numpy as np
@@ -549,6 +550,39 @@ def load_assets():
             images[file[:-4]] = image
             rects[file[:-4]] = image.get_rect()
     return images, rects
+
+
+def node_line(current_location, node_location, distance=60):
+    x1, y1 = current_location
+    x2, y2 = node_location
+    if x1 == x2:
+        perp_slope = 0
+    elif y1 == y2:
+        perp_slope = math.inf
+    else:
+        slope = (y2 - y1) / (x2 - x1)
+        perp_slope = -1/slope
+
+    dx = x2 - x1
+    dy = y2 - y1
+    length = np.sqrt(dx ** 2 + dy ** 2)
+    dx /= length
+    dy /= length
+    center = (node_location[0] - dx * distance, node_location[1] - dy * distance)
+
+    return center, perp_slope
+
+
+def has_crossed_line(current_location, node_location, line_center, line_slope):
+    xv, yv = current_location
+    xn, yn = node_location
+    xl, yl = line_center
+
+    line_distance = np.sqrt((xl - xn) ** 2 + (yl - yn) ** 2)
+
+    b_perp_current = yv - (line_slope * xv)
+
+    return
 
 
 if __name__ == "__main__":
