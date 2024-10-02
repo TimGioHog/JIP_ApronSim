@@ -2,10 +2,10 @@ import numpy as np
 import heapq
 
 
-def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple):
+def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15):
     if type(start) is list:
         start = (start[0], start[1])
-    print(f'start = {start}, goal = {goal}')
+
     if start == (655, 1370):
         service_start = True
         start = (655, 1020)
@@ -17,30 +17,36 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple):
         goal = (535, 1020)
     else:
         service_end = False
-    print(f'start = {start}, goal = {goal}')
 
-    start = (int(start[1] / 10) + 20, int(start[0] / 10))
-    goal = (int(goal[1] / 10) + 20, int(goal[0] / 10))
+    dx, dy = 0, 0
+    m_start = (int(start[1] / 10) + 20, int(start[0] / 10))
+    m_goal = (int(goal[1] / 10) + 20, int(goal[0] / 10))
+    if not service_end:
+        dx = round(-straighten * np.cos(np.deg2rad(goal_rotation)))
+        dy = round(-straighten * np.sin(np.deg2rad(goal_rotation)))
+        m_goal = (m_goal[0] + dy, m_goal[1] + dx)
 
-    if 0 > start[0] >= mesh.shape[0] or 0 > start[1] >= mesh.shape[1]:
-        raise ValueError(f'Pathfinding Error: inserted start value invalid. start = {start}')
-    if 0 > goal[0] >= mesh.shape[0] or 0 > goal[1] >= mesh.shape[1]:
-        raise ValueError(f'Pathfinding Error: inserted goal value invalid. goal = {goal}')
+    if 0 > m_start[0] >= mesh.shape[0] or 0 > m_start[1] >= mesh.shape[1]:
+        raise ValueError(f'Pathfinding Error: inserted start value invalid. start = {m_start}')
+    if 0 > m_goal[0] >= mesh.shape[0] or 0 > m_goal[1] >= mesh.shape[1]:
+        raise ValueError(f'Pathfinding Error: inserted goal value invalid. goal = {m_goal}')
 
-    path = astar(mesh, start, goal)
+    path = astar(mesh, m_start, m_goal)
     smoothed_path = los_smooth_bwrd(path, mesh)
 
-    print(f'smoothed path = {smoothed_path}')
     if service_end:
         smoothed_path.append((157, 53))
+    else:
+        for i in np.arange(1, straighten+1):
+            smoothed_path.append((m_goal[0] - (i / straighten) * dy, m_goal[1] - (i / straighten) * dx))
+
     if service_start:
         smoothed_path.insert(0, (157, 65))
-    print(f'smoothed path = {smoothed_path}')
 
     final_path = []
     for point in smoothed_path:
         final_path.append((point[1] * 10 + 5, (point[0] - 20) * 10 + 5))
-    print(f'final path = {final_path}')
+
     return final_path[1:]  # TODO: Give warning when it couldnt find a path, rather than giving a direct path
 
 

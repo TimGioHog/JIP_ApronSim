@@ -5,6 +5,7 @@ import pandas as pd
 import pygame as pg
 import time
 from pathfinding import smooth_astar
+# import screeninfo
 
 pg.font.init()
 small_font = pg.font.SysFont('arial', 20)
@@ -82,7 +83,11 @@ class Scheduler:
 
 class Simulation:
     def __init__(self):
-        self.screen = pg.display.set_mode((1920, 1080), pg.RESIZABLE, pg.HWSURFACE)
+        pg.init()
+        pg.display.set_caption("ApronSim")
+        # monitors = screeninfo.get_monitors() # TODO: make it better for different monitor types
+        self.screen = pg.display.set_mode((1920, 1080), pg.NOFRAME, pg.HWSURFACE, display=min(pg.display.get_num_displays() - 1, 1))
+
         self.images, self.rects = load_assets()
         current_df = pd.read_excel("data.xlsx")
         self.scheduler = Scheduler(current_df)
@@ -109,7 +114,7 @@ class Simulation:
         self.buttons = [self.button_resume, self.button_quit, self.button_restart, self.button_reset_delays]
         self.buttons.extend(self.delay_buttons)
 
-        mesh_df = pd.read_excel("Mesh_LDL.xlsx", header=None)
+        mesh_df = pd.read_excel("Base_Mesh_4.xlsx", header=None)
         self.mesh = mesh_df.to_numpy()
 
         self.vehicles = []
@@ -211,10 +216,10 @@ class Simulation:
             # Render operation on vop circle + name
             if operation.is_ready() and not operation.completed:
                 operation_count += 1
-                for i in range(len(operation.locations)):
-                    pg.draw.circle(self.screen, (255, 0, 0), operation.locations[i], 10)
+                for op_loc_i in range(len(operation.locations)):
+                    pg.draw.circle(self.screen, (255, 0, 0), operation.locations[op_loc_i], 10)
                     self.screen.blit(small_font.render(string, True, (0, 0, 0)),
-                                     (operation.locations[i][0], operation.locations[i][1] + 10))
+                                     (operation.locations[op_loc_i][0], operation.locations[op_loc_i][1] + 10))
 
         # Delay buttons
         for button in self.delay_buttons:
@@ -339,8 +344,6 @@ class Simulation:
             vehicle.update(time_passed)
 
     def run(self):
-        pg.init()
-        pg.display.set_caption("ApronSim")
         print("Running...")
         last_frame = time.perf_counter()
 
@@ -392,13 +395,13 @@ class Simulation:
         #             (1300, 600), (535, 1370), (765, 362), 3, start_rotation=0))
         self.vehicles.append(
             Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
-                    (655, 1370), (535, 1370), (765, 362), 2))
+                    (655, 1370), (535, 1370), (765, 365), 2, goal_rotation=90))
         self.vehicles.append(
             Vehicle('LDL', self.scheduler.ops["Connect_LDL_Rear"], self.scheduler.ops["Remove_LDL_Rear"],
-                    (655, 1370), (535, 1370), (820, 320), 2))
+                    (655, 1370), (535, 1370), (820, 325), 2))
         self.vehicles.append(
             Vehicle('LDL', self.scheduler.ops["Connect_LDL_Front"], self.scheduler.ops["Remove_LDL_Front"],
-                    (655, 1370), (535, 1370), (820, 756), 2))
+                    (655, 1370), (535, 1370), (820, 755), 2))
 
 
 class Button:
@@ -438,7 +441,7 @@ class Button:
 
 class ButtonDelay(Button):
     def __init__(self, text, pos, size, op_id, color=(200, 200, 200), hover_color=klm_rgb, font_size=40):
-        super().__init__(text, pos, size, callback=None, color=(200, 200, 200), hover_color=klm_rgb, font_size=40)
+        super().__init__(text, pos, size, callback=None, color=color, hover_color=hover_color, font_size=font_size)
         self.operation = op_id
 
     def handle_event(self, event):
@@ -453,7 +456,7 @@ class ButtonDelay(Button):
 
 class Vehicle:
     def __init__(self, name, start_op, end_op, start_loc, end_loc, goal_loc, max_speed, start_velocity=0,
-                 start_rotation=-90, acceleration=1):
+                 start_rotation=-90, acceleration=1, goal_rotation=0):
         self.name = name
         self.start_operation = start_op
         self.end_operation = end_op
@@ -466,15 +469,15 @@ class Vehicle:
         self.image = pg.image.load(f'assets\\{name}.png').convert_alpha()
         self.rect = self.image.get_rect()
         self.rotation = start_rotation
+        self.goal_rotation = goal_rotation
         self.path = []
         self.arrived = False
         self.departed = False
 
-        if name == 'Hydrant_Truck':
+        if name == 'Something':
+            pass
+        else:
             mesh_df = pd.read_excel("Base_Mesh_4.xlsx", header=None)
-            self.mesh = mesh_df.to_numpy()
-        elif name == 'LDL':
-            mesh_df = pd.read_excel("Mesh_LDL.xlsx", header=None)
             self.mesh = mesh_df.to_numpy()
 
     def draw(self, screen):
@@ -486,10 +489,10 @@ class Vehicle:
 
     def update(self, time_step):
         if self.start_operation.is_ready() and not self.arrived and self.path == []:
-            self.path = smooth_astar(self.mesh, self.location, self.goal_loc)
+            self.path = smooth_astar(self.mesh, self.location, self.goal_loc, self.goal_rotation)
             print(f'path found for {self.name}: {self.path}')
         elif self.end_operation.completed and not self.departed and self.path == []:
-            self.path = smooth_astar(self.mesh, self.location, self.end_loc)
+            self.path = smooth_astar(self.mesh, self.location, self.end_loc, self.goal_rotation)
             print(f'path found for {self.name}: {self.path}')
 
         if self.path:
@@ -526,10 +529,11 @@ class Vehicle:
 
             if distance < 60 and len(self.path) > 1:  # TODO: make better, preferably when it "crosses" it, so also when it moves past it too far on the left or right
                 self.path = self.path[1:]
-            elif dist_goal < 10:
+            elif dist_goal < 5:
                 self.path = []
                 if not self.arrived:
                     self.location[0], self.location[1] = self.goal_loc[0], self.goal_loc[1]
+                    self.rotation = self.goal_rotation
                     self.arrived = True
                 else:
                     self.location[0], self.location[1] = self.end_loc[0], self.end_loc[1]
