@@ -21,9 +21,9 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
     dx, dy = 0, 0
     m_start = (int(start[1] / 10) + 20, int(start[0] / 10))
     m_goal = (int(goal[1] / 10) + 20, int(goal[0] / 10))
+    dx = round(-straighten * np.cos(np.deg2rad(goal_rotation)))
+    dy = round(-straighten * np.sin(np.deg2rad(goal_rotation)))
     if not service_end:
-        dx = round(-straighten * np.cos(np.deg2rad(goal_rotation)))
-        dy = round(-straighten * np.sin(np.deg2rad(goal_rotation)))
         m_goal = (m_goal[0] + dy, m_goal[1] + dx)
 
     if 0 > m_start[0] >= mesh.shape[0] or 0 > m_start[1] >= mesh.shape[1]:
@@ -36,6 +36,7 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
 
     if service_end:
         smoothed_path.append((157, 53))
+        smoothed_path.insert(1, (m_start[0] + sign(dy) * 15, m_start[1] + sign(dx) * 15))
     else:
         for i in np.arange(1, straighten+1):
             smoothed_path.append((m_goal[0] - (i / straighten) * dy, m_goal[1] - (i / straighten) * dx))
@@ -45,7 +46,7 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
 
     final_path = []
     for point in smoothed_path:
-        final_path.append((point[1] * 10 + 5, (point[0] - 20) * 10 + 5))
+        final_path.append((int(point[1] * 10 + 5), int((point[0] - 20) * 10 + 5)))
 
     return final_path[1:]  # TODO: Give warning when it couldnt find a path, rather than giving a direct path
 
@@ -166,6 +167,15 @@ def has_obstacle(start, end, array):
             error += dy
 
     return False
+
+
+def sign(num):
+    if num > 0:
+        return 1
+    elif num < 0:
+        return -1
+    else:
+        return 0
 
 
 if __name__ == "__main__":

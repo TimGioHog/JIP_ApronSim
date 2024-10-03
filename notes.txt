@@ -14,8 +14,14 @@ LDL_rear        tl = 712, 283
 Catering front  tl = 760, 870
 Catering rear   tl = 757, 196
 Tug base        tl = 909, 869
-service road entrance = (655, 1020)
-service road exit     = (535, 1020)
+service road entrance = (655, 1370)
+service road exit     = (535, 1370)
+
+Vehicle rotations:
+0   = Down
+90  = Right
+180 = Up
+270 = Left
 
 0deg = right
 90deg = down
