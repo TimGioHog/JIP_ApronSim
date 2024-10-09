@@ -2,7 +2,7 @@ import numpy as np
 import heapq
 
 
-def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15):
+def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15, reverse=False):
     if type(start) is list:
         start = (start[0], start[1])
 
@@ -36,7 +36,8 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
 
     if service_end:
         smoothed_path.append((157, 53))
-        smoothed_path.insert(1, (m_start[0] + sign(dy) * 15, m_start[1] + sign(dx) * 15))
+    if reverse:
+        smoothed_path.insert(1, (m_start[0] + dy, m_start[1] + dx))
     else:
         for i in np.arange(1, straighten+1):
             smoothed_path.append((m_goal[0] - (i / straighten) * dy, m_goal[1] - (i / straighten) * dx))

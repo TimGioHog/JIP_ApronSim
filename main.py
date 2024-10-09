@@ -186,12 +186,12 @@ class Simulation:
                 max(896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * connecting_bridge_time),
                     854)))
 
-        # Catering rendering
-        if self.scheduler.ops['Catering_Front'].is_ready() and not self.scheduler.ops['Catering_Front'].completed:
-            self.screen.blit(self.images['Catering'], (760, 870))
-
-        if self.scheduler.ops['Catering_Rear'].is_ready() and not self.scheduler.ops['Catering_Rear'].completed:
-            self.screen.blit(self.images['Catering'], (757, 196))
+        # # Catering rendering
+        # if self.scheduler.ops['Catering_Front'].is_ready() and not self.scheduler.ops['Catering_Front'].completed:
+        #     self.screen.blit(self.images['Catering'], (760, 870))
+        #
+        # if self.scheduler.ops['Catering_Rear'].is_ready() and not self.scheduler.ops['Catering_Rear'].completed:
+        #     self.screen.blit(self.images['Catering'], (757, 196))
 
         rect_surface = pg.Surface((250, 1080), pg.SRCALPHA)
         rect_surface.fill(pg.Color(0, 0, 0, 150))
@@ -400,13 +400,19 @@ class Simulation:
         #             (1300, 600), (535, 1370), (765, 362), 3, start_rotation=0))
         self.vehicles.append(
             Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
-                    (655, 1370), (535, 1370), (765, 365), 2, goal_rotation=90))
+                    (655, 1370), (535, 1370), (725, 535), 2, goal_rotation=90))
         self.vehicles.append(
             Vehicle('LDL', self.scheduler.ops["Connect_LDL_Rear"], self.scheduler.ops["Remove_LDL_Rear"],
                     (655, 1370), (535, 1370), (815, 325), 2))
         self.vehicles.append(
             Vehicle('LDL', self.scheduler.ops["Connect_LDL_Front"], self.scheduler.ops["Remove_LDL_Front"],
                     (655, 1370), (535, 1370), (815, 755), 2))
+        self.vehicles.append(
+            Vehicle('Catering', self.scheduler.ops["Catering_Rear"], self.scheduler.ops["Catering_Rear"],
+                    (655, 1370), (535, 1370), (837, 227), 2, goal_rotation=5))
+        self.vehicles.append(
+            Vehicle('Catering', self.scheduler.ops["Catering_Front"], self.scheduler.ops["Catering_Front"],
+                    (655, 1370), (535, 1370), (842, 919), 2, goal_rotation=-8))
 
 
 class Button:
@@ -489,11 +495,15 @@ class Vehicle:
         self.upwards        = None
         self.rightwards     = None
 
-        if name == 'Something':
-            pass
+        if name == 'Hydrant_Truck':
+            mesh_df = pd.read_excel("Mesh_Refuel_1.xlsx", header=None)
+            self.mesh_1 = mesh_df.to_numpy()
+            mesh_df = pd.read_excel("Mesh_Refuel_2.xlsx", header=None)
+            self.mesh_2 = mesh_df.to_numpy()
         else:
             mesh_df = pd.read_excel("Base_Mesh_4.xlsx", header=None)
-            self.mesh = mesh_df.to_numpy()
+            self.mesh_1 = mesh_df.to_numpy()
+            self.mesh_2 = self.mesh_1
 
     def draw(self, screen):
         rect_surface = pg.Surface((self.rect.width, self.rect.height), pg.SRCALPHA)
@@ -515,7 +525,7 @@ class Vehicle:
                 angle_diff += 360
             elif angle_diff > 180:
                 angle_diff -= 360
-            if abs(angle_diff) > 179:
+            if abs(angle_diff) > 160:
                 backwards = True
                 angle_diff = 0
 
@@ -570,13 +580,15 @@ class Vehicle:
                        and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
                 if self.start_operation.is_ready() and not self.arrived:
                     goal = self.goal_loc
+                    self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]), goal, self.goal_rotation, straighten=self.straighten)
+                    self.create_gate()
                 elif self.end_operation.completed and not self.departed:
                     goal = self.end_loc
-                else:
-                    goal = None
-
-                if goal:
-                    self.path = smooth_astar(self.mesh, (self.location[0], self.location[1]), goal, self.goal_rotation, straighten=self.straighten)
+                    if self.name == 'Hydrant_Truck':
+                        reverse = False
+                    else:
+                        reverse = True
+                    self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]), goal, self.goal_rotation, straighten=self.straighten, reverse=reverse)
                     self.create_gate()
 
     def create_gate(self, distance=80):
