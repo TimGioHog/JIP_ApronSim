@@ -34,10 +34,11 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
     path = astar(mesh, m_start, m_goal)
     smoothed_path = los_smooth_bwrd(path, mesh)
 
-    if service_end:
-        smoothed_path.append((157, 53))
     if reverse:
         smoothed_path.insert(1, (m_start[0] + dy, m_start[1] + dx))
+
+    if service_end:
+        smoothed_path.append((157, 53))
     else:
         for i in np.arange(1, straighten+1):
             smoothed_path.append((m_goal[0] - (i / straighten) * dy, m_goal[1] - (i / straighten) * dx))
