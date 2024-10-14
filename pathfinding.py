@@ -32,8 +32,10 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
         raise ValueError(f'Pathfinding Error: inserted goal value invalid. goal = {m_goal}')
 
     path = astar(mesh, m_start, m_goal)
+    if len(path) == 1:  # No path found
+        print(f'Pathfinding Error: Could not find path for mesh={mesh}, start={start}, goal={goal}, straighten={straighten}, reverse={reverse}')
+        return []
     smoothed_path = los_smooth_bwrd(path, mesh)
-
     if reverse:
         smoothed_path.insert(1, (m_start[0] + dy, m_start[1] + dx))
 
@@ -50,7 +52,7 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
     for point in smoothed_path:
         final_path.append((int(point[1] * 10 + 5), int((point[0] - 20) * 10 + 5)))
 
-    return final_path[1:]  # TODO: Give warning when it couldnt find a path, rather than giving a direct path
+    return final_path[1:]
 
 
 def heuristic(a, b):
@@ -66,7 +68,7 @@ def astar(mesh: np.ndarray, start: tuple, goal: tuple):
     :param goal: (y, x)
     :type goal: tuple
     :return: path in form of [(y, x), ... (y,x)]
-    :rtype: list
+    :rtype: list, [goal] if no path can be found
     """
     # Directions: up, down, left, right
     neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]

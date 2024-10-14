@@ -115,7 +115,7 @@ class Simulation:
         self.buttons = [self.button_resume, self.button_quit, self.button_restart, self.button_reset_delays]
         self.buttons.extend(self.delay_buttons)
 
-        mesh_df = pd.read_excel("Base_Mesh_4.xlsx", header=None)
+        mesh_df = pd.read_excel("assets\Meshes\Base_Mesh_4.xlsx", header=None)
         self.mesh = mesh_df.to_numpy()
 
         self.vehicles = []
@@ -400,9 +400,6 @@ class Simulation:
 
     def create_vehicles(self):
         self.vehicles = []
-        # self.vehicles.append(
-        #     Vehicle('Hydrant_Truck', self.scheduler.ops["Chocks_Front"], self.scheduler.ops["Refuel_Finalising"],
-        #             (1300, 600), (535, 1370), (765, 362), 3, start_rotation=0))
         self.vehicles.append(
             Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
                     (655, 1370), (535, 1370), (725, 535), 2, goal_rotation=90))
@@ -501,12 +498,12 @@ class Vehicle:
         self.rightwards     = None
 
         if name == 'Hydrant_Truck':
-            mesh_df = pd.read_excel("Mesh_Refuel_1.xlsx", header=None)
+            mesh_df = pd.read_excel("assets\Meshes\Mesh_Refuel_1.xlsx", header=None)
             self.mesh_1 = mesh_df.to_numpy()
-            mesh_df = pd.read_excel("Mesh_Refuel_2.xlsx", header=None)
+            mesh_df = pd.read_excel("assets\Meshes\Mesh_Refuel_2.xlsx", header=None)
             self.mesh_2 = mesh_df.to_numpy()
         else:
-            mesh_df = pd.read_excel("Base_Mesh_4.xlsx", header=None)
+            mesh_df = pd.read_excel("assets\Meshes\Base_Mesh_4.xlsx", header=None)
             self.mesh_1 = mesh_df.to_numpy()
             self.mesh_2 = self.mesh_1
 
@@ -585,7 +582,8 @@ class Vehicle:
                 elif self.start_operation.is_ready() and not self.arrived:
                     goal = self.goal_loc
                     self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]), goal, self.goal_rotation, straighten=self.straighten)
-                    self.create_gate()
+                    if self.path:
+                        self.create_gate()
                 elif self.end_operation.completed and not self.departed:
                     goal = self.end_loc
                     if self.name == 'Hydrant_Truck':
@@ -593,7 +591,8 @@ class Vehicle:
                     else:
                         reverse = True
                     self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]), goal, goal_rotation=90, straighten=self.straighten, reverse=reverse)
-                    self.create_gate()
+                    if self.path:
+                        self.create_gate()
 
     def finish_path(self):
         self.path = []
