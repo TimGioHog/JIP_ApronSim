@@ -286,9 +286,14 @@ class Simulation:
         if self.paused and not self.pause_menu:
             pg.draw.rect(self.screen, black, pg.Rect(816, 0, 288, 60))
             self.screen.blit(large_font.render(f'Simulation Paused', True, white), (826, 10))
+        elif self.speed > 32:
+            rect_surface = pg.Surface((556, 60), pg.SRCALPHA)
+            rect_surface.fill(pg.Color(0, 0, 0, 150))
+            self.screen.blit(rect_surface, (682, 0))
+            self.screen.blit(large_font.render(f'Warning: Skipping Vehicle Movement', True, white), (692, 10))
 
         # Pause Menu
-        elif self.pause_menu or self.scheduler.finished:
+        if self.pause_menu or self.scheduler.finished:
             rect_surface = pg.Surface((320, 600), pg.SRCALPHA)
             rect_surface.fill(pg.Color(0, 0, 0, 150))
             self.screen.blit(rect_surface, (800, 200))
@@ -315,7 +320,7 @@ class Simulation:
                     self.pause_menu = not self.pause_menu
                 elif event.unicode == " " and not self.pause_menu:
                     self.paused = not self.paused
-                elif event.unicode == "=":
+                elif event.unicode == "=" and self.speed <= 512:
                     self.speed = int(self.speed * 2)
                 elif event.unicode == "-" and self.speed >= 2:
                     self.speed = int(self.speed / 2)
@@ -514,71 +519,70 @@ class Vehicle:
 
     def update(self, time_step, simulation):
         if self.path:
-            dx = self.path[0][0] - self.location[0]
-            dy = self.path[0][1] - self.location[1]
-            angle = np.rad2deg(np.arctan2(dy, dx))
-            travel_distance = time_step * self.speed * 25  # 25 pixels per meter
+            if simulation.speed <= 32:
+                dx = self.path[0][0] - self.location[0]
+                dy = self.path[0][1] - self.location[1]
+                angle = np.rad2deg(np.arctan2(dy, dx))
+                travel_distance = time_step * self.speed * 25  # 25 pixels per meter
 
-            backwards = False
-            angle_diff = angle - self.rotation
-            if angle_diff < -180:
-                angle_diff += 360
-            elif angle_diff > 180:
-                angle_diff -= 360
-            if abs(angle_diff) > 160:
-                backwards = True
-                angle_diff = 0
+                backwards = False
+                angle_diff = angle - self.rotation
+                if angle_diff < -180:
+                    angle_diff += 360
+                elif angle_diff > 180:
+                    angle_diff -= 360
+                if abs(angle_diff) > 160:
+                    backwards = True
+                    angle_diff = 0
 
-            # Steering
-            steering_factor = min(1.0, self.speed / 3) ** 2
-            steering = np.clip(10 * angle_diff * steering_factor * time_step, -30 * time_step, 30 * time_step)
-            self.rotation += steering
+                # Steering
+                steering_factor = min(1.0, self.speed / 3) ** 2
+                steering = np.clip(10 * angle_diff * steering_factor * time_step, -30 * time_step, 30 * time_step)
+                self.rotation += steering
 
-            # Accelerating + Braking
-            dist_goal = np.sqrt((self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
-            if dist_goal < 200:
-                brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
-                self.speed = min(self.speed, brake_speed)
-            else:
-                if backwards:
-                    if self.speed - self.acceleration * time_step > -self.max_speed / 2:
-                        self.speed -= self.acceleration * time_step
+                # Accelerating + Braking
+                dist_goal = np.sqrt((self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
+                if dist_goal < 200:
+                    brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
+                    self.speed = min(self.speed, brake_speed)
+                else:
+                    if backwards:
+                        if self.speed - self.acceleration * time_step > -self.max_speed / 2:
+                            self.speed -= self.acceleration * time_step
+                        else:
+                            self.speed = -self.max_speed
                     else:
-                        self.speed = -self.max_speed
-                else:
-                    if self.speed + self.acceleration * time_step < self.max_speed:
-                        self.speed += self.acceleration * time_step
+                        if self.speed + self.acceleration * time_step < self.max_speed:
+                            self.speed += self.acceleration * time_step
+                        else:
+                            self.speed = self.max_speed
+
+                # Displacement
+                tx = np.cos(np.deg2rad(self.rotation)) * travel_distance
+                ty = np.sin(np.deg2rad(self.rotation)) * travel_distance
+                self.location[0] += tx
+                self.location[1] += ty
+
+                # Gate crossing
+                crossed_gate = self.has_crossed_gate()
+                if crossed_gate and len(self.path) > 1:
+                    self.path = self.path[1:]
+                    if len(self.path) == 1:
+                        self.create_gate(0)
+                    elif not self.arrived and len(self.path) <= self.straighten + 1:
+                        self.create_gate(min(80, len(self.path)*7))
                     else:
-                        self.speed = self.max_speed
-
-            # Displacement
-            tx = np.cos(np.deg2rad(self.rotation)) * travel_distance
-            ty = np.sin(np.deg2rad(self.rotation)) * travel_distance
-            self.location[0] += tx
-            self.location[1] += ty
-
-            # Gate crossing
-            if self.has_crossed_gate() and len(self.path) > 1:
-                self.path = self.path[1:]
-                if len(self.path) == 1:
-                    self.create_gate(0)
-                elif not self.arrived and len(self.path) <= self.straighten + 1:
-                    self.create_gate(min(80, len(self.path)*7))
-                else:
-                    self.create_gate()
-            elif self.has_crossed_gate():
-                self.path = []
-                if not self.arrived:
-                    self.location[0], self.location[1] = self.goal_loc[0], self.goal_loc[1]
-                    self.rotation = self.goal_rotation
-                    self.arrived = True
-                else:
-                    self.location[0], self.location[1] = self.end_loc[0], self.end_loc[1]
-                    self.departed = True
-        else:
+                        self.create_gate()
+                elif crossed_gate:
+                    self.finish_path()
+            else:  # Sim speed > 32
+                self.finish_path()
+        else:  # No path
             if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (self.location[1] - vehicle.location[1]) ** 2) < 250
                        and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
-                if self.start_operation.is_ready() and not self.arrived:
+                if ((self.start_operation.is_ready() and not self.arrived) or (self.end_operation.completed and not self.departed)) and simulation.speed > 32:
+                    self.finish_path()
+                elif self.start_operation.is_ready() and not self.arrived:
                     goal = self.goal_loc
                     self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]), goal, self.goal_rotation, straighten=self.straighten)
                     self.create_gate()
@@ -588,8 +592,18 @@ class Vehicle:
                         reverse = False
                     else:
                         reverse = True
-                    self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]), goal, self.goal_rotation, straighten=self.straighten, reverse=reverse)
+                    self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]), goal, goal_rotation=90, straighten=self.straighten, reverse=reverse)
                     self.create_gate()
+
+    def finish_path(self):
+        self.path = []
+        if not self.arrived:
+            self.location[0], self.location[1] = self.goal_loc[0], self.goal_loc[1]
+            self.rotation = self.goal_rotation
+            self.arrived = True
+        else:
+            self.location[0], self.location[1] = self.end_loc[0], self.end_loc[1]
+            self.departed = True
 
     def create_gate(self, distance=80):
         x1, y1 = self.location
