@@ -13,6 +13,7 @@ small_font = pg.font.SysFont('arial', 20)
 medium_font = pg.font.SysFont('arial', 30)
 large_font = pg.font.SysFont('arial', 40)
 white = (255, 255, 255)
+gray = (150, 150, 150)
 black = (0, 0, 0)
 klm_rgb = (0, 161, 228)
 
@@ -50,23 +51,20 @@ class Operation:
 
 
 class Scheduler:
-    def __init__(self, df):
+    def __init__(self, sim_type:str):
         self.ops = {}
-        for index, row in df.iterrows():  # for each operation:
-            operation = Operation(row.iloc[0], row.iloc[1] * 60, row.iloc[11])
-            for dep in row.iloc[2:7]:
-                if pd.notna(dep):
-                    operation.add_dependency(self.ops[dep])
-            for i in range(2):
-                if pd.notna(row.iloc[2 * i + 7]) and pd.notna(row.iloc[2 * i + 8]):
-                    operation.locations.append((row.iloc[2 * i + 7], row.iloc[2 * i + 8]))
-            self.ops[row.iloc[0]] = operation
+        self.load_df(sim_type)
         self.finished = False
+        self.previous = sim_type
 
-    def reset(self):
-        for operation in self.ops.values():
-            self.finished = False
-            operation.reset()
+    def reset(self, sim_type:str):
+        self.finished = False
+        if self.previous == sim_type:
+            for operation in self.ops.values():
+                self.finished = False
+                operation.reset()
+        else:
+            self.load_df(sim_type)
 
     def update(self, sim, duration):
         for operation in self.ops.values():
@@ -81,6 +79,26 @@ class Scheduler:
         if all(op.completed for op in self.ops.values()):
             self.finished = True
 
+    def load_df(self, sim_type):
+        if sim_type.lower() == 'old':
+            df = pd.read_excel("data_manual.xlsx")
+        elif sim_type.lower() == 'new':
+            df = pd.read_excel("data_auto.xlsx")
+        else:
+            raise ValueError(f'Type must be either "old" or "new"')
+
+        self.ops = {}
+        dep_count = 6
+        for index, row in df.iterrows():  # for each operation:
+            operation = Operation(row.iloc[0], row.iloc[1] * 60, round(row.iloc[dep_count + 6]))
+            for dep in row.iloc[2:dep_count+2]:
+                if pd.notna(dep):
+                    operation.add_dependency(self.ops[dep])
+            for i in range(2):
+                if pd.notna(row.iloc[2*i + dep_count+2]) and pd.notna(row.iloc[2*i + dep_count+3]):
+                    operation.locations.append((row.iloc[2*i + dep_count+2], row.iloc[2*i + dep_count+3]))
+            self.ops[row.iloc[0]] = operation
+
 
 class Simulation:
     def __init__(self):
@@ -90,8 +108,7 @@ class Simulation:
         self.screen = pg.display.set_mode((1920, 1080), pg.NOFRAME, pg.HWSURFACE, display=min(pg.display.get_num_displays() - 1, 1))
 
         self.images, self.rects = load_assets()
-        current_df = pd.read_excel("data.xlsx")
-        self.scheduler = Scheduler(current_df)
+        self.scheduler = Scheduler('Old')
         self.timer = -self.scheduler.ops['Parking'].duration
         self.fps = 0
         self.speed = 1
@@ -102,17 +119,20 @@ class Simulation:
         self.blit_paths = False
         self.blit_mesh = False
         self.blit_coord = False
+        self.new_sim = False
+        self.last_frame = time.perf_counter()
 
-        self.button_resume = Button("RESUME", (820, 280), (280, 50), self.button_resume_action)
+        self.button_resume = Button("RESUME", (820, 320), (280, 50), self.button_resume_action)
         self.button_quit = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
-        self.button_restart = Button("RESTART", (820, 360), (280, 50), self.button_restart_action)
+        self.button_restart = Button("RESTART", (820, 400), (280, 50), self.button_restart_action)
         self.button_reset_delays = Button("Reset", (200, 95), (45, 20), self.button_reset_delays_action, font_size=24)
+        self.button_sim_type = ButtonFlip("Old", "New", (900, 480), (120, 40), callback=self.button_sim_type_action, state=self.new_sim)
 
         self.delay_buttons = []
         for i, operation in enumerate(self.scheduler.ops.values()):
             self.delay_buttons.append(ButtonDelay("-", (200, 122 + i * 28), (20, 20), operation, font_size=20))
             self.delay_buttons.append(ButtonDelay("+", (225, 122 + i * 28), (20, 20), operation, font_size=20))
-        self.buttons = [self.button_resume, self.button_quit, self.button_restart, self.button_reset_delays]
+        self.buttons = [self.button_resume, self.button_quit, self.button_restart, self.button_reset_delays, self.button_sim_type]
         self.buttons.extend(self.delay_buttons)
 
         mesh_df = pd.read_excel("assets\Meshes\Base_Mesh_4.xlsx", header=None)
@@ -308,6 +328,7 @@ class Simulation:
 
             self.button_restart.draw(self.screen)
             self.button_quit.draw(self.screen)
+            self.button_sim_type.draw(self.screen)
 
         pg.display.flip()
 
@@ -317,7 +338,10 @@ class Simulation:
                 self.running = False
             elif event.type == pg.KEYUP:
                 if event.key == 27:  # Escape
-                    self.pause_menu = not self.pause_menu
+                    if not self.pause_menu:
+                        self.pause_menu = True
+                    else:
+                        self.button_resume_action()
                 elif event.unicode == " " and not self.pause_menu:
                     self.paused = not self.paused
                 elif event.unicode == "=" and self.speed <= 512:
@@ -345,6 +369,7 @@ class Simulation:
                     self.button_quit.handle_event(event)
                     self.button_restart.handle_event(event)
                     self.button_resume.handle_event(event)
+                    self.button_sim_type.handle_event(event)
 
     def update(self, duration):
         time_passed = duration * self.speed
@@ -355,15 +380,15 @@ class Simulation:
 
     def run(self):
         print("Running...")
-        last_frame = time.perf_counter()
+        self.last_frame = time.perf_counter()
 
         while self.running:
             self.event_handler()
             self.draw()
 
             current_time = time.perf_counter()
-            frame_duration = current_time - last_frame
-            last_frame = current_time
+            frame_duration = current_time - self.last_frame
+            self.last_frame = current_time
 
             if not self.paused and not self.pause_menu and not self.scheduler.finished:
                 self.update(frame_duration)
@@ -376,19 +401,35 @@ class Simulation:
         pg.quit()
 
     def reset(self):
+        if self.new_sim:
+            self.scheduler.reset('new')
+        else:
+            self.scheduler.reset('old')
         self.timer = -self.scheduler.ops['Parking'].duration
+
+        self.delay_buttons = []
+        for i, operation in enumerate(self.scheduler.ops.values()):
+            self.delay_buttons.append(ButtonDelay("-", (200, 122 + i * 28), (20, 20), operation, font_size=20))
+            self.delay_buttons.append(ButtonDelay("+", (225, 122 + i * 28), (20, 20), operation, font_size=20))
+        self.create_vehicles()
+
         self.paused = False
         self.pause_menu = False
-        self.scheduler.reset()
-        self.create_vehicles()
         self.restart = False
+        self.last_frame = time.perf_counter()
 
     def button_resume_action(self):
         if not self.scheduler.finished:
             self.pause_menu = False
+        for button in self.buttons:
+            button.is_hovered = False
+            pg.mouse.set_cursor(pg.SYSTEM_CURSOR_ARROW)
 
     def button_restart_action(self):
         self.restart = True
+        for button in self.buttons:
+            button.is_hovered = False
+            pg.mouse.set_cursor(pg.SYSTEM_CURSOR_ARROW)
 
     def button_quit_action(self):
         print('Quitting...!')
@@ -397,6 +438,9 @@ class Simulation:
     def button_reset_delays_action(self):
         for operation in self.scheduler.ops.values():
             operation.delay = 0
+
+    def button_sim_type_action(self):
+        self.new_sim = not self.new_sim
 
     def create_vehicles(self):
         self.vehicles = []
@@ -448,8 +492,6 @@ class Button:
             self.is_hovered = self.rect.collidepoint(event.pos)
         if event.type == pg.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
             self.callback()
-            self.is_hovered = False
-            pg.mouse.set_cursor(pg.SYSTEM_CURSOR_ARROW)
 
 
 class ButtonDelay(Button):
@@ -467,6 +509,55 @@ class ButtonDelay(Button):
                 self.operation.delay += change
             else:
                 self.operation.delay -= change
+
+
+class ButtonFlip:
+    def __init__(self, text1, text2, pos, size, callback, state, font_size=40):
+        self.pos = pos
+        self.size = size
+        self.callback = callback
+        self.rect = pg.Rect(pos, size)
+        self.font = pg.font.Font(None, font_size)
+        self.is_hovered = False
+
+        self.state = state
+        self.flip_y = self.rect.y + self.rect.height / 2
+
+        self.circle_radius = self.rect.height / 2
+        self.circle_radius_small = self.circle_radius - 0.1 * self.rect.height
+        self.flip_circle_1 = (self.rect.x + self.circle_radius, self.flip_y)
+        self.flip_circle_2 = (self.rect.x - self.circle_radius + self.rect.width, self.flip_y)
+        self.flip_rect = pg.Rect(self.rect.x + self.circle_radius, self.flip_y - self.rect.height/2, self.rect.width - 2*self.circle_radius, self.rect.height)
+
+        self.text_surface_1 = self.font.render(text1, True, white)
+        self.text_surface_2 = self.font.render(text2, True, white)
+
+        self.text_pos_1 = (self.rect.x - self.font.size(text1)[0] - 10, self.flip_y - self.font.size(text1)[1]/2)
+        self.text_pos_2 = (self.rect.x + self.rect.width + 10, self.flip_y - self.font.size(text1)[1]/2)
+
+    def draw(self, screen):
+        # Render text
+        screen.blit(self.text_surface_1, (self.text_pos_1[0], self.text_pos_1[1]))
+        screen.blit(self.text_surface_2, (self.text_pos_2[0], self.text_pos_2[1]))
+
+        if self.state:
+            flip_color = klm_rgb
+            flip_loc = self.flip_circle_2
+        else:
+            flip_color = gray
+            flip_loc = self.flip_circle_1
+
+        pg.draw.circle(screen, flip_color, self.flip_circle_1, self.circle_radius)
+        pg.draw.circle(screen, flip_color, self.flip_circle_2, self.circle_radius)
+        pg.draw.rect(screen, flip_color, self.flip_rect)
+        pg.draw.circle(screen, white, flip_loc, self.circle_radius_small)
+
+    def handle_event(self, event):
+        if event.type == pg.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
+        if event.type == pg.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
+            self.callback()
+            self.state = not self.state
 
 
 class Vehicle:
