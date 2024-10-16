@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.9 (JIP_ApronSim)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (JIP_ApronSim)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 (JIP_ApronSim)" project-jdk-type="Python SDK" />
 </project>
