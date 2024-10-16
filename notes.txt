@@ -37,3 +37,17 @@ Inaccuracy (No pathing):
 512x    = 23s
 1024x   = 52s
 2048x   = 84s
+
+Pushback    -> Taxibot
+Chocks      -> Rails in ground
+GPU         -> Connecting Robot
+Catering    -> Autonomous driving
+Bag. Carts  -> Pit conveyor belt
+Powerstow   -> Autonomous driving
+Water       -> ""
+Toilet      -> ""
+Tech. Insp. -> Spot style
+Cones       -> Gone
+Fuelling    -> Autonomous driving
+Bridge      -> Autonomous
+PCA         -> Firefighter robot
