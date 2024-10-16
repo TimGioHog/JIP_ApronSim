@@ -18,13 +18,16 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
     else:
         service_end = False
 
-    dx, dy = 0, 0
     m_start = (int(start[1] / 10) + 20, int(start[0] / 10))
     m_goal = (int(goal[1] / 10) + 20, int(goal[0] / 10))
-    dx = round(-straighten * np.cos(np.deg2rad(goal_rotation)))
-    dy = round(-straighten * np.sin(np.deg2rad(goal_rotation)))
-    if not service_end:
-        m_goal = (m_goal[0] + dy, m_goal[1] + dx)
+    if goal_rotation is None:
+        straighten = 0
+        dx, dy = 0, 0
+    else:
+        dx = round(-straighten * np.cos(np.deg2rad(goal_rotation)))
+        dy = round(-straighten * np.sin(np.deg2rad(goal_rotation)))
+        if not service_end:
+            m_goal = (m_goal[0] + dy, m_goal[1] + dx)
 
     if 0 > m_start[0] >= mesh.shape[0] or 0 > m_start[1] >= mesh.shape[1]:
         raise ValueError(f'Pathfinding Error: inserted start value invalid. start = {m_start}')
@@ -36,7 +39,7 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
         print(f'Pathfinding Error: Could not find path for mesh={mesh}, start={start}, goal={goal}, straighten={straighten}, reverse={reverse}')
         return []
     smoothed_path = los_smooth_bwrd(path, mesh)
-    if reverse:
+    if reverse and (dy > 0 or dx > 0):
         smoothed_path.insert(1, (m_start[0] + dy, m_start[1] + dx))
 
     if service_end:
