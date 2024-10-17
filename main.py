@@ -18,6 +18,7 @@ gray = (150, 150, 150)
 black = (0, 0, 0)
 klm_rgb = (0, 161, 228)
 op_list_margin = 26
+op_list_start = 160
 
 
 class Operation:
@@ -126,12 +127,14 @@ class Simulation:
         self.new_sim = False
         self.last_frame = time.perf_counter()
 
-        self.button_menu = Button(" ", (0, 0), (30, 30), callback=self.button_menu_action, color=(0, 0, 0))
-        self.button_resume = Button("RESUME", (820, 320), (280, 50), self.button_resume_action)
-        self.button_quit = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
-        self.button_restart = Button("RESTART", (820, 400), (280, 50), self.button_restart_action)
-        self.button_reset_delays = Button("Reset", (200, 95), (45, 20), self.button_reset_delays_action, font_size=24)
-        self.button_sim_type = ButtonFlip("Old", "New", (900, 480), (120, 40), callback=self.button_sim_type_action,
+        self.button_menu            = Button(" ", (0, 0), (30, 30), callback=self.button_menu_action, color=(0, 0, 0))
+        self.button_speed_decrease  = Button("-", (200, 70), (20, 20), callback=self.button_speed_decrease_action, font_size=20)
+        self.button_speed_increase  = Button("+", (225, 70), (20, 20), callback=self.button_speed_increase_action, font_size=20)
+        self.button_resume          = Button("RESUME", (820, 320), (280, 50), self.button_resume_action)
+        self.button_quit            = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
+        self.button_restart         = Button("RESTART", (820, 400), (280, 50), self.button_restart_action)
+        self.button_reset_delays    = Button("Reset", (200, op_list_start-27), (45, 20), self.button_reset_delays_action, font_size=24)
+        self.button_sim_type        = ButtonFlip("Old", "New", (900, 480), (120, 40), callback=self.button_sim_type_action,
                                           state=self.new_sim)
         self.button_sim_type_2 = ButtonFlip("Old", "New", (900, 1030), (120, 40), callback=self.button_sim_type_action,
                                             state=self.new_sim)
@@ -143,11 +146,11 @@ class Simulation:
         self.delay_buttons = []
         for i, operation in enumerate(self.scheduler.ops.values()):
             self.delay_buttons.append(
-                ButtonDelay("-", (200, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
+                ButtonDelay("-", (200, op_list_start + i * op_list_margin), (20, 20), operation, font_size=20))
             self.delay_buttons.append(
-                ButtonDelay("+", (225, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
-        self.buttons = [self.button_menu, self.button_resume, self.button_quit, self.button_restart,
-                        self.button_reset_delays,
+                ButtonDelay("+", (225, op_list_start + i * op_list_margin), (20, 20), operation, font_size=20))
+        self.buttons = [self.button_menu, self.button_speed_decrease, self.button_speed_increase, self.button_resume,
+                        self.button_quit, self.button_restart, self.button_reset_delays,
                         self.button_sim_type, self.button_sim_type_2, self.button_paths, self.button_mesh]
         self.buttons.extend(self.delay_buttons)
 
@@ -253,10 +256,10 @@ class Simulation:
                 colour = (255, 255, 100)
             else:
                 colour = white
-            self.screen.blit(small_font.render(string, True, colour), (10, 120 + i * op_list_margin))
+            self.screen.blit(small_font.render(string, True, colour), (10, op_list_start-2 + i * op_list_margin))
 
             # Delay
-            self.screen.blit(small_font.render(str(operation.delay), True, colour), (175, 120 + i * op_list_margin))
+            self.screen.blit(small_font.render(str(operation.delay), True, colour), (175, op_list_start-2 + i * op_list_margin))
 
             # Render operation on vop circle + name
             if operation.is_ready() and not operation.completed:
@@ -282,6 +285,10 @@ class Simulation:
         self.screen.blit(medium_font.render(f'Access Map', True, white),
                          (1830 - medium_font.size('Access Map')[0] / 2, 85))
         self.button_mesh.draw(self.screen, self.blit_mesh)
+
+        # Speed buttons
+        self.button_speed_decrease.draw(self.screen)
+        self.button_speed_increase.draw(self.screen)
 
         # Delay buttons
         for button in self.delay_buttons:
@@ -413,6 +420,8 @@ class Simulation:
                 for button in self.delay_buttons:
                     button.handle_event(event)
                 self.button_menu.handle_event(event)
+                self.button_speed_decrease.handle_event(event)
+                self.button_speed_increase.handle_event(event)
                 self.button_paths.handle_event(event)
                 self.button_mesh.handle_event(event)
                 self.button_reset_delays.handle_event(event)
@@ -464,9 +473,9 @@ class Simulation:
         self.delay_buttons = []
         for i, operation in enumerate(self.scheduler.ops.values()):
             self.delay_buttons.append(
-                ButtonDelay("-", (200, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
+                ButtonDelay("-", (200, op_list_start + i * op_list_margin), (20, 20), operation, font_size=20))
             self.delay_buttons.append(
-                ButtonDelay("+", (225, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
+                ButtonDelay("+", (225, op_list_start + i * op_list_margin), (20, 20), operation, font_size=20))
         self.create_vehicles()
 
         self.paused = False
@@ -477,6 +486,14 @@ class Simulation:
     def button_menu_action(self):
         if not self.scheduler.finished:
             self.pause_menu = not self.pause_menu
+
+    def button_speed_decrease_action(self):
+        if self.speed >= 2:
+            self.speed = int(self.speed / 2)
+
+    def button_speed_increase_action(self):
+        if self.speed <= 512:
+            self.speed = int(self.speed * 2)
 
     def button_resume_action(self):
         if not self.scheduler.finished:
