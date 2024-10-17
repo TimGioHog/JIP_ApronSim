@@ -60,6 +60,7 @@ class Scheduler:
         self.previous = sim_type
 
     def reset(self, sim_type: str):
+        print(f'resetting for {sim_type}')
         self.finished = False
         if self.previous == sim_type:
             for operation in self.ops.values():
@@ -107,7 +108,8 @@ class Simulation:
         pg.init()
         pg.display.set_caption("ApronSim")
         # monitors = screeninfo.get_monitors() # TODO: make it better for different monitor types
-        self.screen = pg.display.set_mode((1920, 1080), pg.NOFRAME, pg.HWSURFACE, display=min(pg.display.get_num_displays() - 1, 1))
+        self.screen = pg.display.set_mode((1920, 1080), pg.NOFRAME, pg.HWSURFACE,
+                                          display=min(pg.display.get_num_displays() - 1, 1))
 
         self.images, self.rects = load_assets()
         self.scheduler = Scheduler('Old')
@@ -124,17 +126,29 @@ class Simulation:
         self.new_sim = False
         self.last_frame = time.perf_counter()
 
+        self.button_menu = Button(" ", (0, 0), (30, 30), callback=self.button_menu_action, color=(0, 0, 0))
         self.button_resume = Button("RESUME", (820, 320), (280, 50), self.button_resume_action)
         self.button_quit = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
         self.button_restart = Button("RESTART", (820, 400), (280, 50), self.button_restart_action)
         self.button_reset_delays = Button("Reset", (200, 95), (45, 20), self.button_reset_delays_action, font_size=24)
-        self.button_sim_type = ButtonFlip("Old", "New", (900, 480), (120, 40), callback=self.button_sim_type_action, state=self.new_sim)
+        self.button_sim_type = ButtonFlip("Old", "New", (900, 480), (120, 40), callback=self.button_sim_type_action,
+                                          state=self.new_sim)
+        self.button_sim_type_2 = ButtonFlip("Old", "New", (900, 1030), (120, 40), callback=self.button_sim_type_action,
+                                            state=self.new_sim)
+        self.button_paths = ButtonFlip("Off", "On", (1800, 50), (60, 20), callback=self.button_paths_action,
+                                       state=self.blit_paths)
+        self.button_mesh = ButtonFlip("Off", "On", (1800, 130), (60, 20), callback=self.button_mesh_action,
+                                      state=self.blit_mesh)
 
         self.delay_buttons = []
         for i, operation in enumerate(self.scheduler.ops.values()):
-            self.delay_buttons.append(ButtonDelay("-", (200, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
-            self.delay_buttons.append(ButtonDelay("+", (225, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
-        self.buttons = [self.button_resume, self.button_quit, self.button_restart, self.button_reset_delays, self.button_sim_type]
+            self.delay_buttons.append(
+                ButtonDelay("-", (200, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
+            self.delay_buttons.append(
+                ButtonDelay("+", (225, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
+        self.buttons = [self.button_menu, self.button_resume, self.button_quit, self.button_restart,
+                        self.button_reset_delays,
+                        self.button_sim_type, self.button_sim_type_2, self.button_paths, self.button_mesh]
         self.buttons.extend(self.delay_buttons)
 
         mesh_df = pd.read_excel("assets/Meshes/Base_Mesh_4.xlsx", header=None)
@@ -173,14 +187,16 @@ class Simulation:
         # Tug rendering
         if self.new_sim:
             if self.scheduler.ops["Pushback"].is_ready():
-                self.screen.blit(self.images['Taxibot'], (909, 869 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (
-                        self.timer - self.scheduler.ops["Pushback"].start_time)))
+                self.screen.blit(self.images['Taxibot'],
+                                 (909, 869 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (
+                                         self.timer - self.scheduler.ops["Pushback"].start_time)))
             elif self.scheduler.ops["Attach_Tug"].is_ready():
                 self.screen.blit(self.images['Taxibot'], (909, 869))
         else:
             if self.scheduler.ops["Pushback"].is_ready():
-                self.screen.blit(self.images['Tug'], (909, 869 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (
-                        self.timer - self.scheduler.ops["Pushback"].start_time)))
+                self.screen.blit(self.images['Tug'],
+                                 (909, 869 - (20 / (self.scheduler.ops["Pushback"].duration / 60)) * (
+                                         self.timer - self.scheduler.ops["Pushback"].start_time)))
             elif self.scheduler.ops["Attach_Tug"].is_ready():
                 self.screen.blit(self.images['Tug'], (909, 869))
 
@@ -250,6 +266,23 @@ class Simulation:
                     self.screen.blit(small_font.render(string, True, (0, 0, 0)),
                                      (operation.locations[op_loc_i][0], operation.locations[op_loc_i][1] + 10))
 
+        # Menu button
+        self.button_menu.draw(self.screen)
+        pg.draw.circle(self.screen, white, (15, 8), 2)
+        pg.draw.circle(self.screen, white, (15, 15), 2)
+        pg.draw.circle(self.screen, white, (15, 22), 2)
+
+        # Option buttons
+        rect_surface = pg.Surface((180, 170), pg.SRCALPHA)
+        rect_surface.fill(pg.Color(0, 0, 0, 150))
+        self.screen.blit(rect_surface, (1740, 0))
+        self.screen.blit(medium_font.render(f'Pathing', True, white),
+                         (1830 - medium_font.size('Pathing')[0] / 2, 5))
+        self.button_paths.draw(self.screen, self.blit_paths)
+        self.screen.blit(medium_font.render(f'Access Map', True, white),
+                         (1830 - medium_font.size('Access Map')[0] / 2, 85))
+        self.button_mesh.draw(self.screen, self.blit_mesh)
+
         # Delay buttons
         for button in self.delay_buttons:
             button.draw(self.screen)
@@ -258,29 +291,29 @@ class Simulation:
         # Clock rendering - Minutes
         if int(self.timer / 60) < 10:
             if self.timer < 0:
-                self.screen.blit(large_font.render(f'-0{int(self.timer / 60)}', True, white), (45, 10))
+                self.screen.blit(large_font.render(f'-0{int(self.timer / 60)}', True, white), (75, 10))
             else:
-                self.screen.blit(large_font.render(f'0{int(self.timer / 60)}', True, white), (56, 10))
+                self.screen.blit(large_font.render(f'0{int(self.timer / 60)}', True, white), (86, 10))
         else:
-            self.screen.blit(large_font.render(f'{int(self.timer / 60)}', True, white), (56, 10))
+            self.screen.blit(large_font.render(f'{int(self.timer / 60)}', True, white), (86, 10))
 
         # Clock rendering - Seconds
         if self.timer < 0:
             if self.timer % 60 <= 51:
-                self.screen.blit(large_font.render(f':{int(61 - self.timer % 60)}', True, white), (93, 10))
+                self.screen.blit(large_font.render(f':{int(61 - self.timer % 60)}', True, white), (123, 10))
             else:
-                self.screen.blit(large_font.render(f':0{int(61 - self.timer % 60)}', True, white), (93, 10))
+                self.screen.blit(large_font.render(f':0{int(61 - self.timer % 60)}', True, white), (123, 10))
         else:
             if self.timer % 60 < 10:
-                self.screen.blit(large_font.render(f':0{int(self.timer % 60)}', True, white), (93, 10))
+                self.screen.blit(large_font.render(f':0{int(self.timer % 60)}', True, white), (123, 10))
             else:
-                self.screen.blit(large_font.render(f':{int(self.timer % 60)}', True, white), (93, 10))
+                self.screen.blit(large_font.render(f':{int(self.timer % 60)}', True, white), (123, 10))
 
         # Speed
         self.screen.blit(medium_font.render(f'Speed: {self.speed}x', True, white), (10, 60))
 
         # FPS Counter
-        self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (1880, 10))
+        self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (210, 10))
 
         # Pathfinding overlay
         if self.blit_paths:
@@ -297,8 +330,10 @@ class Simulation:
 
                     pg.draw.line(self.screen, (100, 100, 255), vehicle.location, vehicle.path[0], width=2)
                     pg.draw.circle(self.screen, (0, 255, 255), vehicle.gate_center, 5)
-                    pg.draw.line(self.screen, white, (vehicle.gate_center[0] - vehicle.gate_dx, vehicle.gate_center[1] - vehicle.gate_dy),
-                                 (vehicle.gate_center[0] + vehicle.gate_dx, vehicle.gate_center[1] + vehicle.gate_dy), 2)
+                    pg.draw.line(self.screen, white,
+                                 (vehicle.gate_center[0] - vehicle.gate_dx, vehicle.gate_center[1] - vehicle.gate_dy),
+                                 (vehicle.gate_center[0] + vehicle.gate_dx, vehicle.gate_center[1] + vehicle.gate_dy),
+                                 2)
 
         # Mesh overlay
         if self.blit_mesh:
@@ -308,7 +343,8 @@ class Simulation:
         if self.blit_coord:
             coords = pg.mouse.get_pos()
             self.screen.blit(small_font.render(str(coords), True, white), (coords[0] + 5, coords[1] + 5))
-            self.screen.blit(small_font.render(str((int(coords[1] / 10) + 20, int(coords[0] / 10))), True, white), (coords[0] + 5, coords[1] + 25))
+            self.screen.blit(small_font.render(str((int(coords[1] / 10) + 20, int(coords[0] / 10))), True, white),
+                             (coords[0] + 5, coords[1] + 25))
 
         # Paused Pop-Up
         if self.paused and not self.pause_menu:
@@ -336,8 +372,13 @@ class Simulation:
 
             self.button_restart.draw(self.screen)
             self.button_quit.draw(self.screen)
-            self.button_sim_type.draw(self.screen)
+            self.button_sim_type.draw(self.screen, self.new_sim)
 
+        else:
+            rect_surface = pg.Surface((320, 60), pg.SRCALPHA)
+            rect_surface.fill(pg.Color(0, 0, 0, 150))
+            self.screen.blit(rect_surface, (800, 1020))
+            self.button_sim_type_2.draw(self.screen, self.new_sim)
         pg.display.flip()
 
     def event_handler(self):
@@ -371,6 +412,9 @@ class Simulation:
 
                 for button in self.delay_buttons:
                     button.handle_event(event)
+                self.button_menu.handle_event(event)
+                self.button_paths.handle_event(event)
+                self.button_mesh.handle_event(event)
                 self.button_reset_delays.handle_event(event)
 
                 if self.pause_menu or self.scheduler.finished:
@@ -378,6 +422,8 @@ class Simulation:
                     self.button_restart.handle_event(event)
                     self.button_resume.handle_event(event)
                     self.button_sim_type.handle_event(event)
+                else:
+                    self.button_sim_type_2.handle_event(event)
 
     def update(self, duration):
         time_passed = duration * self.speed
@@ -391,8 +437,8 @@ class Simulation:
         self.last_frame = time.perf_counter()
 
         while self.running:
-            self.event_handler()
             self.draw()
+            self.event_handler()
 
             current_time = time.perf_counter()
             frame_duration = current_time - self.last_frame
@@ -417,14 +463,20 @@ class Simulation:
 
         self.delay_buttons = []
         for i, operation in enumerate(self.scheduler.ops.values()):
-            self.delay_buttons.append(ButtonDelay("-", (200, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
-            self.delay_buttons.append(ButtonDelay("+", (225, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
+            self.delay_buttons.append(
+                ButtonDelay("-", (200, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
+            self.delay_buttons.append(
+                ButtonDelay("+", (225, 122 + i * op_list_margin), (20, 20), operation, font_size=20))
         self.create_vehicles()
 
         self.paused = False
         self.pause_menu = False
         self.restart = False
         self.last_frame = time.perf_counter()
+
+    def button_menu_action(self):
+        if not self.scheduler.finished:
+            self.pause_menu = not self.pause_menu
 
     def button_resume_action(self):
         if not self.scheduler.finished:
@@ -451,12 +503,19 @@ class Simulation:
         self.new_sim = not self.new_sim
         self.button_restart_action()
 
+    def button_paths_action(self):
+        self.blit_paths = not self.blit_paths
+
+    def button_mesh_action(self):
+        self.blit_mesh = not self.blit_mesh
+
     def create_vehicles(self):
         self.vehicles = []
 
         if self.new_sim:
             self.vehicles.append(
-                Vehicle('Hydrant_Truck_auto', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
+                Vehicle('Hydrant_Truck_auto', self.scheduler.ops["Refuel_Prep"],
+                        self.scheduler.ops["Refuel_Finalising"],
                         (655, 1370), (535, 1370), [(725, 535)], max_speed=2, goal_rotation=90))
             self.vehicles.append(
                 Vehicle('LDL_auto', self.scheduler.ops["Connect_LDL_Rear"], self.scheduler.ops["Remove_LDL_Rear"],
@@ -472,8 +531,10 @@ class Simulation:
                         (655, 1370), (535, 1370), [(842, 919)], max_speed=2, goal_rotation=-8))
             self.vehicles.append(
                 Vehicle('Spot', self.scheduler.ops["Technical_Inspection"], self.scheduler.ops["Technical_Inspection"],
-                        (1485, 735), (1485, 735), [(1155, 635), (1065, 405), (1125, 145), (855, 145), (855, 405), (755, 635), (865, 985)],
-                        max_speed=0.5, goal_rotation=None, straighten=0, waiting_times=[140, 140, 140, 140, 140, 140, 140]))
+                        (1485, 735), (1485, 735),
+                        [(1155, 635), (1065, 405), (1125, 145), (855, 145), (855, 405), (755, 635), (865, 985)],
+                        max_speed=0.5, goal_rotation=None, straighten=0,
+                        waiting_times=[140, 140, 140, 140, 140, 140, 140]))
         else:
             self.vehicles.append(
                 Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
@@ -564,7 +625,8 @@ class ButtonFlip:
         self.circle_radius_small = self.circle_radius - 0.1 * self.rect.height
         self.flip_circle_1 = (self.rect.x + self.circle_radius, self.flip_y)
         self.flip_circle_2 = (self.rect.x - self.circle_radius + self.rect.width, self.flip_y)
-        self.flip_rect = pg.Rect(self.rect.x + self.circle_radius, self.flip_y - self.rect.height / 2, self.rect.width - 2 * self.circle_radius, self.rect.height)
+        self.flip_rect = pg.Rect(self.rect.x + self.circle_radius, self.flip_y - self.rect.height / 2,
+                                 self.rect.width - 2 * self.circle_radius, self.rect.height)
 
         self.text_surface_1 = self.font.render(text1, True, white)
         self.text_surface_2 = self.font.render(text2, True, white)
@@ -572,11 +634,12 @@ class ButtonFlip:
         self.text_pos_1 = (self.rect.x - self.font.size(text1)[0] - 10, self.flip_y - self.font.size(text1)[1] / 2)
         self.text_pos_2 = (self.rect.x + self.rect.width + 10, self.flip_y - self.font.size(text1)[1] / 2)
 
-    def draw(self, screen):
+    def draw(self, screen, state):
         # Render text
         screen.blit(self.text_surface_1, (self.text_pos_1[0], self.text_pos_1[1]))
         screen.blit(self.text_surface_2, (self.text_pos_2[0], self.text_pos_2[1]))
 
+        self.state = state
         if self.state:
             flip_color = klm_rgb
             flip_loc = self.flip_circle_2
@@ -594,11 +657,11 @@ class ButtonFlip:
             self.is_hovered = self.rect.collidepoint(event.pos)
         if event.type == pg.MOUSEBUTTONDOWN and event.button == 1 and self.is_hovered:
             self.callback()
-            self.state = not self.state
 
 
 class Vehicle:
-    def __init__(self, name, start_op, end_op, start_loc, end_loc, goal_locs, goal_rotation, max_speed, start_velocity=0,
+    def __init__(self, name, start_op, end_op, start_loc, end_loc, goal_locs, goal_rotation, max_speed,
+                 start_velocity=0,
                  start_rotation=-90, acceleration=1, straighten=20, waiting_times=None):
         self.name = name
         self.start_operation = start_op
@@ -679,7 +742,8 @@ class Vehicle:
                 self.rotation += steering
 
                 # Accelerating + Braking
-                dist_goal = np.sqrt((self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
+                dist_goal = np.sqrt(
+                    (self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
                 if dist_goal < 200:
                     brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
                     self.speed = min(self.speed, brake_speed)
@@ -718,14 +782,18 @@ class Vehicle:
             else:  # Sim speed > 32
                 self.finish_path()
         else:  # No path
-            if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (self.location[1] - vehicle.location[1]) ** 2) < 250
+            if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (
+                    self.location[1] - vehicle.location[1]) ** 2) < 250
                        and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
-                if ((self.start_operation.is_ready() and not self.arrived) or (self.end_operation.completed and not self.departed)) and simulation.speed > 32:
+                if ((self.start_operation.is_ready() and not self.arrived) or (
+                        self.end_operation.completed and not self.departed)) and simulation.speed > 32:
                     self.finish_path()
-                elif self.start_operation.is_ready() and self.goals_completed < len(self.goal_locs) and (self.wait_time <= 0 or self.goals_completed == 0):
+                elif self.start_operation.is_ready() and self.goals_completed < len(self.goal_locs) and (
+                        self.wait_time <= 0 or self.goals_completed == 0):
                     self.arrived = False
                     self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]),
-                                             self.goal_locs[self.goals_completed], self.goal_rotation, straighten=self.straighten)
+                                             self.goal_locs[self.goals_completed], self.goal_rotation,
+                                             straighten=self.straighten)
                     if self.path:
                         if len(self.path) == 1:
                             self.create_gate(0)
@@ -739,7 +807,8 @@ class Vehicle:
                     else:
                         reverse = True
                     self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]),
-                                             self.end_loc, goal_rotation=self.goal_rotation, straighten=self.straighten, reverse=reverse)
+                                             self.end_loc, goal_rotation=self.goal_rotation, straighten=self.straighten,
+                                             reverse=reverse)
                     if self.path:
                         if len(self.path) == 1:
                             self.create_gate(0)
@@ -753,7 +822,8 @@ class Vehicle:
     def finish_path(self):
         self.path = []
         if self.goals_completed < len(self.goal_locs):
-            self.location[0], self.location[1] = self.goal_locs[self.goals_completed][0], self.goal_locs[self.goals_completed][1]
+            self.location[0], self.location[1] = self.goal_locs[self.goals_completed][0], \
+            self.goal_locs[self.goals_completed][1]
             if self.goal_rotation is not None:
                 self.rotation = self.goal_rotation
             self.arrived = True
