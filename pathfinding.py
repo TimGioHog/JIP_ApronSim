@@ -2,7 +2,7 @@ import numpy as np
 import heapq
 
 
-def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15, reverse=False):
+def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15, reverse_out=False, full_reverse=False):
     if type(start) is list:
         start = (start[0], start[1])
 
@@ -24,8 +24,12 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
         straighten = 0
         dx, dy = 0, 0
     else:
-        dx = round(-straighten * np.cos(np.deg2rad(goal_rotation)))
-        dy = round(-straighten * np.sin(np.deg2rad(goal_rotation)))
+        if full_reverse:
+            dx = -round(-straighten * np.cos(np.deg2rad(goal_rotation)))
+            dy = -round(-straighten * np.sin(np.deg2rad(goal_rotation)))
+        else:
+            dx = round(-straighten * np.cos(np.deg2rad(goal_rotation)))
+            dy = round(-straighten * np.sin(np.deg2rad(goal_rotation)))
         if not service_end:
             m_goal = (m_goal[0] + dy, m_goal[1] + dx)
 
@@ -36,10 +40,10 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
 
     path = astar(mesh, m_start, m_goal)
     if len(path) == 1:  # No path found
-        print(f'Pathfinding Error: Could not find path for mesh={mesh}, start={start}, goal={goal}, straighten={straighten}, reverse={reverse}')
+        print(f'Pathfinding Error: Could not find path for mesh={mesh}, start={start}, goal={goal}, straighten={straighten}, reverse_out={reverse_out}, full_reverse={full_reverse}')
         return []
     smoothed_path = los_smooth_bwrd(path, mesh)
-    if reverse and (dy > 0 or dx > 0):
+    if reverse_out and (dy > 0 or dx > 0):
         smoothed_path.insert(1, (m_start[0] + dy, m_start[1] + dx))
 
     if service_end:

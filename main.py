@@ -156,7 +156,7 @@ class Simulation:
                         self.button_sim_type, self.button_sim_type_2, self.button_paths, self.button_mesh]
         self.buttons.extend(self.delay_buttons)
 
-        mesh_df = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
+        mesh_df = pd.read_excel("assets/Meshes/Mesh_Water.xlsx", header=None)
         self.mesh = mesh_df.to_numpy()
 
         self.vehicles = []
@@ -243,8 +243,8 @@ class Simulation:
         self.screen.blit(self.images['GPU'], (850, 990))
 
         # Hydrant piping
-        if self.scheduler.ops['Refuel_Prep'].completed and not self.scheduler.ops['Refuel'].completed:
-            self.screen.blit(self.images['Hydrant_pipes'], (586, 514))
+        if self.scheduler.ops['Refuel_Prep'].completed and not self.scheduler.ops['Refuel_Finalising'].completed:
+            self.screen.blit(self.images['Hydrant_pipes'], (588, 561))
 
         # Vehicles
         for vehicle in self.vehicles:
@@ -360,28 +360,14 @@ class Simulation:
 
         # Clock rendering - Minutes
         time_left = 51 * 60 - self.timer
-        if abs(int(time_left / 60)) < 10:
-            if time_left < 0:
-                self.screen.blit(large_font.render(f'-0{abs(int(time_left / 60))}', True, white), (75, 10))
-            else:
-                self.screen.blit(large_font.render(f'0{int(time_left / 60)}', True, white), (86, 10))
-        else:
-            if time_left < 0:
-                self.screen.blit(large_font.render(f'{int(time_left / 60)}', True, white), (75, 10))
-            else:
-                self.screen.blit(large_font.render(f'{int(time_left / 60)}', True, white), (86, 10))
+
+        sign = '+' if time_left < 0 else '-'
+        minutes = abs(int(time_left / 60))
+        self.screen.blit(large_font.render(f'{sign}{minutes:02}', True, white), (67 if time_left < 0 else 75, 10))
 
         # Clock rendering - Seconds
-        if time_left < 0:
-            if time_left % 60 <= 50:
-                self.screen.blit(large_font.render(f':{int(60 - time_left % 60)}', True, white), (123, 10))
-            else:
-                self.screen.blit(large_font.render(f':0{int(60 - time_left % 60)}', True, white), (123, 10))
-        else:
-            if time_left % 60 < 10:
-                self.screen.blit(large_font.render(f':0{int(time_left % 60)}', True, white), (123, 10))
-            else:
-                self.screen.blit(large_font.render(f':{int(time_left % 60)}', True, white), (123, 10))
+        seconds = int(60 - time_left % 60) if time_left < 0 else int(time_left % 60)
+        self.screen.blit(large_font.render(f':{seconds:02}', True, white), (123, 10))
 
         # Speed
         self.screen.blit(medium_font.render(f'Speed: {self.speed}x', True, white), (10, 60))
@@ -606,66 +592,65 @@ class Simulation:
         if self.new_sim:
             self.vehicles.append(
                 Vehicle('PCA_cart', self.scheduler.ops["Connect_PCA"], self.scheduler.ops["Remove_PCA"],
-                        (1215, 765), (1215, 765), [(975, 705)], max_speed=0.5, goal_rotation=None, straighten=0, start_rotation=-164))
+                        (1215, 765), (1215, 765), [(975, 705)], max_speed=0.5, goal_rotation=[None], straighten=0, start_rotation=-164))
             self.vehicles.append(
                 Vehicle('GPU_cart', self.scheduler.ops["Connect_GPU"], self.scheduler.ops["Remove_GPU"],
-                        (905, 995), (905, 995), [(965, 945)], max_speed=0.5, goal_rotation=None, straighten=0, start_rotation=-40))
+                        (905, 995), (905, 995), [(965, 945)], max_speed=0.5, goal_rotation=[None], straighten=0, start_rotation=-40))
             self.vehicles.append(
-                Vehicle('Hydrant_Truck_auto', self.scheduler.ops["Refuel_Prep"],
-                        self.scheduler.ops["Refuel_Finalising"],
-                        (655, 1370), (535, 1370), [(725, 535)], goal_rotation=90))
+                Vehicle('Hydrant_Truck_auto', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
+                        (655, 1370), (535, 1370), [(355, 895), (725, 635)], goal_rotation=[160, 98],
+                        reverse=[False, True], waiting_times=[10, 0], straighten=10, snap=[False, False]))
             self.vehicles.append(
                 Vehicle('Catering_auto', self.scheduler.ops["Catering_Rear"], self.scheduler.ops["Catering_Rear"],
-                        (655, 1370), (535, 1370), [(837, 227)], goal_rotation=5))
+                        (655, 1370), (535, 1370), [(837, 227)], goal_rotation=[5]))
             self.vehicles.append(
                 Vehicle('Catering_auto', self.scheduler.ops["Catering_Front"], self.scheduler.ops["Catering_Front"],
-                        (655, 1370), (535, 1370), [(842, 919)], goal_rotation=-8))
+                        (655, 1370), (535, 1370), [(842, 919)], goal_rotation=[-8]))
             self.vehicles.append(
                 Vehicle('Lavatory_auto', self.scheduler.ops["Toilet_Service"], self.scheduler.ops["Toilet_Service"],
-                        (655, 1370), (535, 1370), [(1055, 195)], goal_rotation=180))
+                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=[180]))
             self.vehicles.append(
                 Vehicle('Water_auto', self.scheduler.ops["Water_Service"], self.scheduler.ops["Water_Service"],
-                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=180))
+                        (655, 1370), (535, 1370), [(905, 75)], goal_rotation=[80], snap=[False]))
             self.vehicles.append(
                 Vehicle('Stairs_auto', self.scheduler.ops["Deboard"], self.scheduler.ops["Cabin_Cleaning"],
-                        (655, 1370), (535, 1370), [(1085, 205)], goal_rotation=171))
+                        (655, 1370), (535, 1370), [(1085, 205)], goal_rotation=[171]))
             self.vehicles.append(
                 Vehicle('Spot', self.scheduler.ops["Technical_Inspection"], self.scheduler.ops["Technical_Inspection"],
                         (1485, 735), (1485, 735),
-                        [(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (865, 985)],
-                        max_speed=0.5, goal_rotation=None, straighten=0,
-                        waiting_times=[140, 140, 140, 140, 140, 140, 140]))
+                        [(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (815, 985)],
+                        max_speed=0.5, goal_rotation=[None]*7, straighten=0, waiting_times=[140]*7, snap=[False]*7))
         else:
             self.vehicles.append(
                 Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
-                        (655, 1370), (535, 1370), [(725, 535)], goal_rotation=90))
+                        (655, 1370), (535, 1370), [(355, 895), (715, 635)], goal_rotation=[160, 98],
+                        reverse=[False, True], waiting_times=[10, 0], straighten=10, snap=[False, False]))
             self.vehicles.append(
                 Vehicle('LDL', self.scheduler.ops["Connect_LDL_Rear"], self.scheduler.ops["Remove_LDL_Rear"],
-                        (655, 1370), (535, 1370), [(815, 325)], goal_rotation=0))
+                        (655, 1370), (535, 1370), [(815, 325)], goal_rotation=[0]))
             self.vehicles.append(
                 Vehicle('LDL', self.scheduler.ops["Connect_LDL_Front"], self.scheduler.ops["Remove_LDL_Front"],
-                        (655, 1370), (535, 1370), [(815, 825)], goal_rotation=0))
+                        (655, 1370), (535, 1370), [(815, 825)], goal_rotation=[0]))
             self.vehicles.append(
                 Vehicle('Catering', self.scheduler.ops["Catering_Rear"], self.scheduler.ops["Catering_Rear"],
-                        (655, 1370), (535, 1370), [(837, 227)], goal_rotation=5))
+                        (655, 1370), (535, 1370), [(837, 227)], goal_rotation=[5]))
             self.vehicles.append(
                 Vehicle('Catering', self.scheduler.ops["Catering_Front"], self.scheduler.ops["Catering_Front"],
-                        (655, 1370), (535, 1370), [(842, 919)], goal_rotation=-8))
+                        (655, 1370), (535, 1370), [(842, 919)], goal_rotation=[-8]))
             self.vehicles.append(
                 Vehicle('Lavatory', self.scheduler.ops["Toilet_Service"], self.scheduler.ops["Toilet_Service"],
-                        (655, 1370), (535, 1370), [(1055, 195)], goal_rotation=180))
+                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=[180]))
             self.vehicles.append(
                 Vehicle('Water', self.scheduler.ops["Water_Service"], self.scheduler.ops["Water_Service"],
-                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=180))
+                        (655, 1370), (535, 1370), [(905, 75)], goal_rotation=[80], snap=[False]))
             self.vehicles.append(
                 Vehicle('Stairs', self.scheduler.ops["Deboard"], self.scheduler.ops["Cabin_Cleaning"],
-                        (655, 1370), (535, 1370), [(1088, 209)], goal_rotation=171))
+                        (655, 1370), (535, 1370), [(1085, 205)], goal_rotation=[171]))
             self.vehicles.append(
                 Vehicle(f'Employee_{random.randint(1, 4)}', self.scheduler.ops["Technical_Inspection"], self.scheduler.ops["Technical_Inspection"],
                         (1485, 735), (1485, 735),
-                        [(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (865, 985)],
-                        max_speed=0.5, goal_rotation=None, straighten=0,
-                        waiting_times=[230, 230, 230, 230, 230, 230, 230]))
+                        [(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (815, 985)],
+                        max_speed=0.5, goal_rotation=[None]*7, straighten=0, waiting_times=[230]*7, snap=[False]*7))
 
 
 class Button:
@@ -771,7 +756,7 @@ class ButtonFlip:
 class Vehicle:
     def __init__(self, name: str, start_op, end_op, start_loc, end_loc, goal_locs, goal_rotation, max_speed: float = 1.3,
                  start_velocity=0,
-                 start_rotation=-90, acceleration=1, straighten=20, waiting_times=None):
+                 start_rotation=-90, acceleration=1, straighten=20, waiting_times=None, reverse=None, snap=None):
         self.name = name
         self.start_operation = start_op
         self.end_operation = end_op
@@ -784,7 +769,7 @@ class Vehicle:
         self.image = pg.image.load(f'assets\\{name}.png').convert_alpha()
         self.rect = self.image.get_rect()
         self.rotation = start_rotation
-        self.goal_rotation = goal_rotation
+        self.goal_rotation_list = goal_rotation
         self.straighten = straighten
         self.waiting_times = waiting_times
         if self.waiting_times is None:
@@ -794,8 +779,11 @@ class Vehicle:
             self.walk = True
         else:
             self.walk = False
+        self.reverse_list = reverse
+        self.snap = snap
 
         self.path = []
+        self.full_reverse = False
         self.arrived = False
         self.departed = False
         self.gate_center = None
@@ -820,6 +808,10 @@ class Vehicle:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Free.xlsx", header=None)
             self.mesh_1 = mesh_df.to_numpy()
             self.mesh_2 = self.mesh_1
+        elif name in ['Water', 'Water_auto']:
+            mesh_df = pd.read_excel("assets/Meshes/Mesh_Water.xlsx", header=None)
+            self.mesh_1 = mesh_df.to_numpy()
+            self.mesh_2 = self.mesh_1
         else:
             mesh_df = pd.read_excel("assets/Meshes/Base_Mesh_4.xlsx", header=None)
             self.mesh_1 = mesh_df.to_numpy()
@@ -840,7 +832,7 @@ class Vehicle:
                 angle = np.rad2deg(np.arctan2(dy, dx))
                 travel_distance = time_step * self.speed * 25  # 25 pixels per meter
 
-                backwards = False
+                reverse = True if self.full_reverse else False
                 angle_diff = angle - self.rotation
                 if angle_diff < -180:
                     angle_diff += 360
@@ -850,8 +842,12 @@ class Vehicle:
                     if self.name.startswith('Employee'):
                         self.rotation = angle
                     else:
-                        backwards = True
-                    angle_diff = 0
+                        reverse = True
+                if reverse:
+                    reverse_rotation = self.rotation + 180
+                    if reverse_rotation > 180:
+                        reverse_rotation -= 360
+                    angle_diff = angle - reverse_rotation
 
                 # Steering
                 if self.walk:
@@ -865,10 +861,14 @@ class Vehicle:
                 dist_goal = np.sqrt(
                     (self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
                 brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
-                if self.speed > brake_speed:
-                    self.speed = min(self.speed, brake_speed)
+
+                if (not reverse and self.speed > brake_speed) or (reverse and self.speed < -brake_speed):
+                    if reverse:
+                        self.speed = max(self.speed, -brake_speed)
+                    else:
+                        self.speed = min(self.speed, brake_speed)
                 else:
-                    if backwards:
+                    if reverse:
                         if self.speed - self.acceleration * time_step > -self.max_speed / 2:
                             self.speed -= self.acceleration * time_step
                         else:
@@ -911,9 +911,15 @@ class Vehicle:
                 elif self.start_operation.is_ready() and self.goals_completed < len(self.goal_locs) and (
                         self.wait_time <= 0 or self.goals_completed == 0):
                     self.arrived = False
+
+                    if self.reverse_list is None:
+                        self.full_reverse = False
+                    else:
+                        self.full_reverse = self.reverse_list[self.goals_completed]
+
                     self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]),
-                                             self.goal_locs[self.goals_completed], self.goal_rotation,
-                                             straighten=self.straighten)
+                                             self.goal_locs[self.goals_completed], self.goal_rotation_list[self.goals_completed],
+                                             straighten=self.straighten, full_reverse=self.full_reverse)
                     if self.path:
                         if len(self.path) == 1:
                             self.create_gate(0)
@@ -922,13 +928,14 @@ class Vehicle:
                         else:
                             self.create_gate()
                 elif self.end_operation.completed and not self.departed:
+                    self.full_reverse = False
                     if self.name in ['Hydrant_Truck', 'Hydrant_Truck_auto'] or self.walk:
-                        reverse = False
+                        reverse_out = False
                     else:
-                        reverse = True
+                        reverse_out = True
                     self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]),
-                                             self.end_loc, goal_rotation=self.goal_rotation, straighten=self.straighten,
-                                             reverse=reverse)
+                                             self.end_loc, goal_rotation=90, straighten=self.straighten,
+                                             reverse_out=reverse_out, full_reverse=self.full_reverse)
                     if self.path:
                         if len(self.path) == 1:
                             self.create_gate(0)
@@ -941,13 +948,18 @@ class Vehicle:
 
     def finish_path(self):
         self.path = []
+        self.speed = 0
         if self.goals_completed < len(self.goal_locs):
-            self.location[0], self.location[1] = self.goal_locs[self.goals_completed][0], \
-                self.goal_locs[self.goals_completed][1]
-            if self.goal_rotation is not None:
-                self.rotation = self.goal_rotation
+            if self.snap is None or self.snap[self.goals_completed]:
+                self.location[0], self.location[1] = self.goal_locs[self.goals_completed][0], \
+                    self.goal_locs[self.goals_completed][1]
+                if self.goal_rotation_list[self.goals_completed] is not None:
+                    self.rotation = self.goal_rotation_list[self.goals_completed]
             self.arrived = True
-            self.wait_time = self.waiting_times[self.goals_completed]
+            try:
+                self.wait_time = self.waiting_times[self.goals_completed]
+            except IndexError:
+                self.wait_time = 0
             self.goals_completed += 1
         else:
             self.location[0], self.location[1] = self.end_loc[0], self.end_loc[1]
