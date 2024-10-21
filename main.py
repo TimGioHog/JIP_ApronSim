@@ -116,6 +116,7 @@ class Simulation:
         self.images, self.rects = load_assets()
         self.scheduler = Scheduler('Old')
         self.timer = -self.scheduler.ops['Parking'].duration
+        self.speed_limit = 32
         self.fps = 0
         self.speed = 1
         self.paused = False
@@ -128,14 +129,14 @@ class Simulation:
         self.new_sim = False
         self.last_frame = time.perf_counter()
 
-        self.button_menu            = Button(" ", (0, 0), (30, 30), callback=self.button_menu_action, color=(0, 0, 0))
-        self.button_speed_decrease  = Button("-", (200, 70), (20, 20), callback=self.button_speed_decrease_action, font_size=20)
-        self.button_speed_increase  = Button("+", (225, 70), (20, 20), callback=self.button_speed_increase_action, font_size=20)
-        self.button_resume          = Button("RESUME", (820, 320), (280, 50), self.button_resume_action)
-        self.button_quit            = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
-        self.button_restart         = Button("RESTART", (820, 400), (280, 50), self.button_restart_action)
-        self.button_reset_delays    = Button("Reset", (200, op_list_start-27), (45, 20), self.button_reset_delays_action, font_size=24)
-        self.button_sim_type        = ButtonFlip("Old", "New", (900, 480), (120, 40), callback=self.button_sim_type_action,
+        self.button_menu = Button(" ", (0, 0), (30, 30), callback=self.button_menu_action, color=(0, 0, 0))
+        self.button_speed_decrease = Button("-", (200, 70), (20, 20), callback=self.button_speed_decrease_action, font_size=20)
+        self.button_speed_increase = Button("+", (225, 70), (20, 20), callback=self.button_speed_increase_action, font_size=20)
+        self.button_resume = Button("RESUME", (820, 320), (280, 50), self.button_resume_action)
+        self.button_quit = Button("QUIT", (820, 730), (280, 50), self.button_quit_action)
+        self.button_restart = Button("RESTART", (820, 400), (280, 50), self.button_restart_action)
+        self.button_reset_delays = Button("Reset", (200, op_list_start - 27), (45, 20), self.button_reset_delays_action, font_size=24)
+        self.button_sim_type = ButtonFlip("Old", "New", (900, 480), (120, 40), callback=self.button_sim_type_action,
                                           state=self.new_sim)
         self.button_sim_type_2 = ButtonFlip("Old", "New", (900, 1030), (120, 40), callback=self.button_sim_type_action,
                                             state=self.new_sim)
@@ -176,18 +177,19 @@ class Simulation:
         self.screen.fill('Black')
         self.screen.blit(self.images['apron'], self.rects['apron'])
 
-        # Old Sim: Cones, GPU
+        # Old Sim: Cones, GPU, PCA
         if not self.new_sim:
-            self.screen.blit(self.images['GPU'], (850, 990))
+            if self.scheduler.ops['Connect_GPU'].completed and not self.scheduler.ops['Remove_GPU'].completed:
+                self.screen.blit(self.images['GPU_cable'], (889, 943))
             if self.scheduler.ops['Place_Cones'].completed and not self.scheduler.ops['Remove_Cones'].completed:
                 self.screen.blit(self.images['Cone'], (535, 455))
                 self.screen.blit(self.images['Cone'], (1375, 455))
                 self.screen.blit(self.images['Cone'], (835, 700))
                 self.screen.blit(self.images['Cone'], (1075, 700))
             if self.scheduler.ops['Connect_PCA'].completed and not self.scheduler.ops['Remove_PCA'].completed:
-                self.screen.blit(self.images['PCA'], (965, 690))
+                self.screen.blit(self.images['PCA_tube'], (965, 660))
 
-        # New Sim: Rail chocks
+        # New Sim: Rail chocks, Baggage Pit, GPU & PCA cables
         else:
             self.screen.blit(self.images['Rail_chock'], (865, 481))
             self.screen.blit(self.images['Rail_chock'], (1043, 481))
@@ -210,10 +212,8 @@ class Simulation:
                     self.screen.blit(self.images['Baggage_pit_cover_rear'], (620, 291))
 
                 self.screen.blit(self.images['Baggage_pit_open'], (712, 290))
-
             else:
                 self.screen.blit(self.images['Baggage_pit'], (712, 290))
-
             if self.scheduler.ops['Connect_LDL_Front'].start_time is not None and not self.scheduler.ops['Remove_LDL_Front'].completed:
                 if self.scheduler.ops['Offload_Front'].start_time is not None and not self.scheduler.ops['Load_Front'].completed:
                     self.screen.blit(self.images['Baggage_pit_extended'], (769, 810))
@@ -232,9 +232,19 @@ class Simulation:
                     self.screen.blit(self.images['Baggage_pit_cover_front'], (620, 797))
 
                 self.screen.blit(self.images['Baggage_pit_open'], (712, 796))
-
             else:
                 self.screen.blit(self.images['Baggage_pit'], (712, 796))
+
+            pg.draw.line(self.screen, (255, 233, 38), (1238, 767), self.vehicles[0].location, width=10)
+            pg.draw.line(self.screen, (255, 233, 38), (890, 1005), self.vehicles[1].location, width=3)
+
+        # PCA and GPU Units
+        self.screen.blit(self.images['PCA_unit'], (1237, 750))
+        self.screen.blit(self.images['GPU'], (850, 990))
+
+        # Hydrant piping
+        if self.scheduler.ops['Refuel_Prep'].completed and not self.scheduler.ops['Refuel'].completed:
+            self.screen.blit(self.images['Hydrant_pipes'], (586, 514))
 
         # Vehicles
         for vehicle in self.vehicles:
@@ -309,10 +319,10 @@ class Simulation:
                 colour = (255, 255, 100)
             else:
                 colour = white
-            self.screen.blit(small_font.render(string, True, colour), (10, op_list_start-2 + i * op_list_margin))
+            self.screen.blit(small_font.render(string, True, colour), (10, op_list_start - 2 + i * op_list_margin))
 
             # Delay
-            self.screen.blit(small_font.render(str(operation.delay), True, colour), (175, op_list_start-2 + i * op_list_margin))
+            self.screen.blit(small_font.render(str(operation.delay), True, colour), (175, op_list_start - 2 + i * op_list_margin))
 
             # Render operation on vop circle + name
             if operation.is_ready() and not operation.completed:
@@ -349,25 +359,29 @@ class Simulation:
         self.button_reset_delays.draw(self.screen)
 
         # Clock rendering - Minutes
-        if int(self.timer / 60) < 10:
-            if self.timer < 0:
-                self.screen.blit(large_font.render(f'-0{int(self.timer / 60)}', True, white), (75, 10))
+        time_left = 51 * 60 - self.timer
+        if abs(int(time_left / 60)) < 10:
+            if time_left < 0:
+                self.screen.blit(large_font.render(f'-0{abs(int(time_left / 60))}', True, white), (75, 10))
             else:
-                self.screen.blit(large_font.render(f'0{int(self.timer / 60)}', True, white), (86, 10))
+                self.screen.blit(large_font.render(f'0{int(time_left / 60)}', True, white), (86, 10))
         else:
-            self.screen.blit(large_font.render(f'{int(self.timer / 60)}', True, white), (86, 10))
+            if time_left < 0:
+                self.screen.blit(large_font.render(f'{int(time_left / 60)}', True, white), (75, 10))
+            else:
+                self.screen.blit(large_font.render(f'{int(time_left / 60)}', True, white), (86, 10))
 
         # Clock rendering - Seconds
-        if self.timer < 0:
-            if self.timer % 60 <= 51:
-                self.screen.blit(large_font.render(f':{int(61 - self.timer % 60)}', True, white), (123, 10))
+        if time_left < 0:
+            if time_left % 60 <= 50:
+                self.screen.blit(large_font.render(f':{int(60 - time_left % 60)}', True, white), (123, 10))
             else:
-                self.screen.blit(large_font.render(f':0{int(61 - self.timer % 60)}', True, white), (123, 10))
+                self.screen.blit(large_font.render(f':0{int(60 - time_left % 60)}', True, white), (123, 10))
         else:
-            if self.timer % 60 < 10:
-                self.screen.blit(large_font.render(f':0{int(self.timer % 60)}', True, white), (123, 10))
+            if time_left % 60 < 10:
+                self.screen.blit(large_font.render(f':0{int(time_left % 60)}', True, white), (123, 10))
             else:
-                self.screen.blit(large_font.render(f':{int(self.timer % 60)}', True, white), (123, 10))
+                self.screen.blit(large_font.render(f':{int(time_left % 60)}', True, white), (123, 10))
 
         # Speed
         self.screen.blit(medium_font.render(f'Speed: {self.speed}x', True, white), (10, 60))
@@ -410,7 +424,7 @@ class Simulation:
         if self.paused and not self.pause_menu:
             pg.draw.rect(self.screen, black, pg.Rect(816, 0, 288, 60))
             self.screen.blit(large_font.render(f'Simulation Paused', True, white), (826, 10))
-        elif self.speed > 16:
+        elif self.speed > self.speed_limit:
             rect_surface = pg.Surface((556, 60), pg.SRCALPHA)
             rect_surface.fill(pg.Color(0, 0, 0, 150))
             self.screen.blit(rect_surface, (682, 0))
@@ -497,6 +511,8 @@ class Simulation:
     def run(self):
         print("Running...")
         self.last_frame = time.perf_counter()
+        fps_list = []
+        fps_update_time = 0
 
         while self.running:
             self.draw()
@@ -509,8 +525,13 @@ class Simulation:
             if not self.paused and not self.pause_menu and not self.scheduler.finished:
                 self.update(frame_duration)
 
-            self.fps = 1 / frame_duration
-
+            fps_list.append(1 / frame_duration)
+            fps_update_time += frame_duration
+            if fps_update_time >= 0.5:
+                self.fps = int(sum(fps_list) / len(fps_list))
+                self.speed_limit = self.fps / 3
+                fps_list = []
+                fps_update_time = 0
             if self.restart:
                 print(f'\n Restarting...')
                 self.reset()
@@ -584,21 +605,30 @@ class Simulation:
 
         if self.new_sim:
             self.vehicles.append(
+                Vehicle('PCA_cart', self.scheduler.ops["Connect_PCA"], self.scheduler.ops["Remove_PCA"],
+                        (1215, 765), (1215, 765), [(975, 705)], max_speed=0.5, goal_rotation=None, straighten=0, start_rotation=-164))
+            self.vehicles.append(
+                Vehicle('GPU_cart', self.scheduler.ops["Connect_GPU"], self.scheduler.ops["Remove_GPU"],
+                        (905, 995), (905, 995), [(965, 945)], max_speed=0.5, goal_rotation=None, straighten=0, start_rotation=-40))
+            self.vehicles.append(
                 Vehicle('Hydrant_Truck_auto', self.scheduler.ops["Refuel_Prep"],
                         self.scheduler.ops["Refuel_Finalising"],
-                        (655, 1370), (535, 1370), [(725, 535)], max_speed=2, goal_rotation=90))
-            # self.vehicles.append(
-            #     Vehicle('LDL_auto', self.scheduler.ops["Connect_LDL_Rear"], self.scheduler.ops["Remove_LDL_Rear"],
-            #             (655, 1370), (535, 1370), [(815, 325)], max_speed=2, goal_rotation=0))
-            # self.vehicles.append(
-            #     Vehicle('LDL_auto', self.scheduler.ops["Connect_LDL_Front"], self.scheduler.ops["Remove_LDL_Front"],
-            #             (655, 1370), (535, 1370), [(815, 825)], max_speed=2, goal_rotation=0))
+                        (655, 1370), (535, 1370), [(725, 535)], goal_rotation=90))
             self.vehicles.append(
                 Vehicle('Catering_auto', self.scheduler.ops["Catering_Rear"], self.scheduler.ops["Catering_Rear"],
-                        (655, 1370), (535, 1370), [(837, 227)], max_speed=2, goal_rotation=5))
+                        (655, 1370), (535, 1370), [(837, 227)], goal_rotation=5))
             self.vehicles.append(
                 Vehicle('Catering_auto', self.scheduler.ops["Catering_Front"], self.scheduler.ops["Catering_Front"],
-                        (655, 1370), (535, 1370), [(842, 919)], max_speed=2, goal_rotation=-8))
+                        (655, 1370), (535, 1370), [(842, 919)], goal_rotation=-8))
+            self.vehicles.append(
+                Vehicle('Lavatory_auto', self.scheduler.ops["Toilet_Service"], self.scheduler.ops["Toilet_Service"],
+                        (655, 1370), (535, 1370), [(1055, 195)], goal_rotation=180))
+            self.vehicles.append(
+                Vehicle('Water_auto', self.scheduler.ops["Water_Service"], self.scheduler.ops["Water_Service"],
+                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=180))
+            self.vehicles.append(
+                Vehicle('Stairs_auto', self.scheduler.ops["Deboard"], self.scheduler.ops["Cabin_Cleaning"],
+                        (655, 1370), (535, 1370), [(1085, 205)], goal_rotation=171))
             self.vehicles.append(
                 Vehicle('Spot', self.scheduler.ops["Technical_Inspection"], self.scheduler.ops["Technical_Inspection"],
                         (1485, 735), (1485, 735),
@@ -608,31 +638,34 @@ class Simulation:
         else:
             self.vehicles.append(
                 Vehicle('Hydrant_Truck', self.scheduler.ops["Refuel_Prep"], self.scheduler.ops["Refuel_Finalising"],
-                        (655, 1370), (535, 1370), [(725, 535)], max_speed=2, goal_rotation=90))
+                        (655, 1370), (535, 1370), [(725, 535)], goal_rotation=90))
             self.vehicles.append(
                 Vehicle('LDL', self.scheduler.ops["Connect_LDL_Rear"], self.scheduler.ops["Remove_LDL_Rear"],
-                        (655, 1370), (535, 1370), [(815, 325)], max_speed=2, goal_rotation=0))
+                        (655, 1370), (535, 1370), [(815, 325)], goal_rotation=0))
             self.vehicles.append(
                 Vehicle('LDL', self.scheduler.ops["Connect_LDL_Front"], self.scheduler.ops["Remove_LDL_Front"],
-                        (655, 1370), (535, 1370), [(815, 825)], max_speed=2, goal_rotation=0))
+                        (655, 1370), (535, 1370), [(815, 825)], goal_rotation=0))
             self.vehicles.append(
                 Vehicle('Catering', self.scheduler.ops["Catering_Rear"], self.scheduler.ops["Catering_Rear"],
-                        (655, 1370), (535, 1370), [(837, 227)], max_speed=2, goal_rotation=5))
+                        (655, 1370), (535, 1370), [(837, 227)], goal_rotation=5))
             self.vehicles.append(
                 Vehicle('Catering', self.scheduler.ops["Catering_Front"], self.scheduler.ops["Catering_Front"],
-                        (655, 1370), (535, 1370), [(842, 919)], max_speed=2, goal_rotation=-8))
+                        (655, 1370), (535, 1370), [(842, 919)], goal_rotation=-8))
             self.vehicles.append(
                 Vehicle('Lavatory', self.scheduler.ops["Toilet_Service"], self.scheduler.ops["Toilet_Service"],
-                        (655, 1370), (535, 1370), [(1055, 195)], max_speed=2, goal_rotation=180))
+                        (655, 1370), (535, 1370), [(1055, 195)], goal_rotation=180))
             self.vehicles.append(
                 Vehicle('Water', self.scheduler.ops["Water_Service"], self.scheduler.ops["Water_Service"],
-                        (655, 1370), (535, 1370), [(1055, 290)], max_speed=2, goal_rotation=180))
+                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=180))
+            self.vehicles.append(
+                Vehicle('Stairs', self.scheduler.ops["Deboard"], self.scheduler.ops["Cabin_Cleaning"],
+                        (655, 1370), (535, 1370), [(1088, 209)], goal_rotation=171))
             self.vehicles.append(
                 Vehicle(f'Employee_{random.randint(1, 4)}', self.scheduler.ops["Technical_Inspection"], self.scheduler.ops["Technical_Inspection"],
                         (1485, 735), (1485, 735),
                         [(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (865, 985)],
                         max_speed=0.5, goal_rotation=None, straighten=0,
-                        waiting_times=[140, 140, 140, 140, 140, 140, 140]))
+                        waiting_times=[230, 230, 230, 230, 230, 230, 230]))
 
 
 class Button:
@@ -736,7 +769,7 @@ class ButtonFlip:
 
 
 class Vehicle:
-    def __init__(self, name, start_op, end_op, start_loc, end_loc, goal_locs, goal_rotation, max_speed,
+    def __init__(self, name: str, start_op, end_op, start_loc, end_loc, goal_locs, goal_rotation, max_speed: float = 1.3,
                  start_velocity=0,
                  start_rotation=-90, acceleration=1, straighten=20, waiting_times=None):
         self.name = name
@@ -783,6 +816,10 @@ class Vehicle:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
             self.mesh_1 = mesh_df.to_numpy()
             self.mesh_2 = self.mesh_1
+        elif name in ['PCA_cart', 'GPU_cart']:
+            mesh_df = pd.read_excel("assets/Meshes/Mesh_Free.xlsx", header=None)
+            self.mesh_1 = mesh_df.to_numpy()
+            self.mesh_2 = self.mesh_1
         else:
             mesh_df = pd.read_excel("assets/Meshes/Base_Mesh_4.xlsx", header=None)
             self.mesh_1 = mesh_df.to_numpy()
@@ -797,7 +834,7 @@ class Vehicle:
 
     def update(self, time_step, simulation):
         if self.path:
-            if simulation.speed <= 16:
+            if simulation.speed <= simulation.speed_limit:
                 dx = self.path[0][0] - self.location[0]
                 dy = self.path[0][1] - self.location[1]
                 angle = np.rad2deg(np.arctan2(dy, dx))
@@ -810,7 +847,10 @@ class Vehicle:
                 elif angle_diff > 180:
                     angle_diff -= 360
                 if abs(angle_diff) > 160:
-                    backwards = True
+                    if self.name.startswith('Employee'):
+                        self.rotation = angle
+                    else:
+                        backwards = True
                     angle_diff = 0
 
                 # Steering
@@ -824,8 +864,8 @@ class Vehicle:
                 # Accelerating + Braking
                 dist_goal = np.sqrt(
                     (self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
-                if dist_goal < 200:
-                    brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
+                brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
+                if self.speed > brake_speed:
                     self.speed = min(self.speed, brake_speed)
                 else:
                     if backwards:
@@ -859,14 +899,14 @@ class Vehicle:
                         self.create_gate()
                 elif crossed_gate:
                     self.finish_path()
-            else:  # Sim speed > 16
+            else:  # Sim speed > speed limit
                 self.finish_path()
         else:  # No path
             if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (
                     self.location[1] - vehicle.location[1]) ** 2) < 250
                        and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
                 if ((self.start_operation.is_ready() and not self.arrived) or (
-                        self.end_operation.completed and not self.departed)) and simulation.speed > 16:
+                        self.end_operation.completed and not self.departed)) and simulation.speed > simulation.speed_limit:
                     self.finish_path()
                 elif self.start_operation.is_ready() and self.goals_completed < len(self.goal_locs) and (
                         self.wait_time <= 0 or self.goals_completed == 0):
@@ -903,7 +943,7 @@ class Vehicle:
         self.path = []
         if self.goals_completed < len(self.goal_locs):
             self.location[0], self.location[1] = self.goal_locs[self.goals_completed][0], \
-            self.goal_locs[self.goals_completed][1]
+                self.goal_locs[self.goals_completed][1]
             if self.goal_rotation is not None:
                 self.rotation = self.goal_rotation
             self.arrived = True
