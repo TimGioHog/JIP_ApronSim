@@ -2,7 +2,7 @@ import numpy as np
 import heapq
 
 
-def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15, reverse_out=False, full_reverse=False):
+def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15, reverse_out=(0, 0), full_reverse=False):
     if type(start) is list:
         start = (start[0], start[1])
 
@@ -43,8 +43,9 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
         print(f'Pathfinding Error: Could not find path for mesh={mesh}, start={start}, goal={goal}, straighten={straighten}, reverse_out={reverse_out}, full_reverse={full_reverse}')
         return []
     smoothed_path = los_smooth_bwrd(path, mesh)
-    if reverse_out and (dy > 0 or dx > 0):
-        smoothed_path.insert(1, (m_start[0] + dy, m_start[1] + dx))
+
+    if reverse_out[0] > 0:
+        smoothed_path.insert(1, (m_start[0] + round(reverse_out[0] * np.sin(np.deg2rad(reverse_out[1]))), m_start[1] + round(reverse_out[0] * np.cos(np.deg2rad(reverse_out[1])))))
 
     if service_end:
         smoothed_path.append((157, 53))
