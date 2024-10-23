@@ -20,6 +20,7 @@ black = (0, 0, 0)
 klm_rgb = (0, 161, 228)
 op_list_margin = 24
 op_list_start = 160
+display_mesh = pd.read_excel("assets/Meshes/Mesh_4.xlsx", header=None)
 
 
 class Operation:
@@ -159,8 +160,7 @@ class Simulation:
                         self.button_sim_type, self.button_sim_type_2, self.button_paths, self.button_mesh]
         self.buttons.extend(self.delay_buttons)
 
-        mesh_df = pd.read_excel("assets/Meshes/Base_Mesh_4.xlsx", header=None)
-        self.mesh = mesh_df.to_numpy()
+        self.mesh = display_mesh.to_numpy()
 
         self.vehicles = []
         self.create_vehicles()
@@ -597,13 +597,13 @@ class Simulation:
 
         if self.new_sim:
             self.vehicles.append(
-                Vehicle('PCA_cart', [self.scheduler.ops["Connect_PCA"], None], [None, None, self.scheduler.ops["Remove_PCA"]],
+                Vehicle('PCA_cart', [self.scheduler.ops["Connect_PCA"], None], [None, self.scheduler.ops["Remove_PCA"]],
                         (1215, 765), goal_locs=[(975, 705), (1215, 765)], max_speed=0.5, goal_rotations=[None, None], straighten=0,
-                        start_rotation=-164))
+                        start_rotation=-164, service_road_end=False))
             self.vehicles.append(
-                Vehicle('GPU_cart', [self.scheduler.ops["Connect_GPU"], None], [None, None, self.scheduler.ops["Remove_GPU"]],
+                Vehicle('GPU_cart', [self.scheduler.ops["Connect_GPU"], None], [None, self.scheduler.ops["Remove_GPU"]],
                         (905, 995), goal_locs=[(965, 945), (905, 995)], max_speed=0.5, goal_rotations=[None, None], straighten=0,
-                        start_rotation=-40))
+                        start_rotation=-40, service_road_end=False))
             self.vehicles.append(
                 Vehicle('Hydrant_Truck_auto', [self.scheduler.ops["Refuel_Prep"], None], [None, None, self.scheduler.ops["Refuel_Finalising"]],
                         (655, 1370), goal_locs=[(355, 895), (715, 635)], goal_rotations=[160, 98],
@@ -630,21 +630,20 @@ class Simulation:
                         snap=[False] * 8, service_road_end=False))
         else:
             self.vehicles.append(
-                Vehicle('Hydrant_Truck', [self.scheduler.ops["Refuel_Prep"], None], [None, None, self.scheduler.ops["Refuel_Finalising"]],
-                        (655, 1370), goal_locs=[(355, 895), (705, 635)], goal_rotations=[160, 110],
-                        reverse=[False, True], waiting_times=[10, 0], straighten=10, snap=[False, False]))
+                Vehicle('Hydrant_Truck', [self.scheduler.ops["Refuel_Prep"], None, None], [None, None, self.scheduler.ops["Refuel_Finalising"], None],
+                        (655, 1370), goal_locs=[(355, 895), (705, 635), (635, 695)], goal_rotations=[160, 110, None], reverse=[False, True, False], straighten=10))
             self.vehicles.append(
                 Vehicle('LDL', [self.scheduler.ops["Connect_LDL_Rear"]], [None, self.scheduler.ops["Remove_LDL_Rear"]],
-                        (655, 1370), goal_locs=[(815, 325)], goal_rotations=[0]))  # reverse_out=(50, 180)))
+                        (655, 1370), goal_locs=[(815, 325)], goal_rotations=[0], snap=[True]))  # reverse_out=(50, 180)))
             self.vehicles.append(
                 Vehicle('LDL', [self.scheduler.ops["Connect_LDL_Front"]], [None, self.scheduler.ops["Remove_LDL_Front"]],
-                        (655, 1370), goal_locs=[(815, 825)], goal_rotations=[0]))  # reverse_out=(40, 180)))
+                        (655, 1370), goal_locs=[(815, 825)], goal_rotations=[0], snap=[True]))  # reverse_out=(40, 180)))
             self.vehicles.append(
                 Vehicle('Catering', [self.scheduler.ops["Catering_Rear"]], [None, self.scheduler.ops["Catering_Rear"]],
-                        (655, 1370), goal_locs=[(837, 227)], goal_rotations=[5]))  # reverse_out=(50, 180)))
+                        (655, 1370), goal_locs=[(837, 227)], goal_rotations=[5], snap=[True]))  # reverse_out=(50, 180)))
             self.vehicles.append(
                 Vehicle('Catering', [self.scheduler.ops["Catering_Front"]], [None, self.scheduler.ops["Catering_Front"]],
-                        (655, 1370), goal_locs=[(845, 925)], goal_rotations=[-12]))  # reverse_out=(40, 180)))
+                        (655, 1370), goal_locs=[(845, 925)], goal_rotations=[-12], snap=[True]))  # reverse_out=(40, 180)))
             self.vehicles.append(
                 Vehicle('Lavatory', [self.scheduler.ops["Toilet_Service"], None], [None, None, self.scheduler.ops["Toilet_Service"]],
                         (655, 1370), goal_locs=[(1445, 305), (1055, 305)],
@@ -844,6 +843,7 @@ class Vehicle:
         self.goals_completed = 0
         self.end_goals_completed = 0
         self.prev_steering = 0
+
         if self.name in ['Spot', 'Employee_1', 'Employee_2', 'Employee_3', 'Employee_4']:
             self.walking = True
         else:
@@ -852,24 +852,19 @@ class Vehicle:
         # Mesh initialisation
         if self.walking:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
-            self.mesh_1 = mesh_df.to_numpy()
-            self.mesh_2 = self.mesh_1
+            self.mesh = mesh_df.to_numpy()
         elif name in ['PCA_cart', 'GPU_cart']:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Free.xlsx", header=None)
-            self.mesh_1 = mesh_df.to_numpy()
-            self.mesh_2 = self.mesh_1
+            self.mesh = mesh_df.to_numpy()
         elif name in ['Water', 'Water_auto']:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Water.xlsx", header=None)
-            self.mesh_1 = mesh_df.to_numpy()
-            self.mesh_2 = self.mesh_1
+            self.mesh = mesh_df.to_numpy()
         elif name in ['Lavatory', 'Lavatory_auto']:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Lavatory.xlsx", header=None)
-            self.mesh_1 = mesh_df.to_numpy()
-            self.mesh_2 = self.mesh_1
+            self.mesh = mesh_df.to_numpy()
         else:
-            mesh_df = pd.read_excel("assets/Meshes/Base_Mesh_4.xlsx", header=None)
-            self.mesh_1 = mesh_df.to_numpy()
-            self.mesh_2 = self.mesh_1
+            mesh_df = pd.read_excel("assets/Meshes/Mesh_4.xlsx", header=None)
+            self.mesh = mesh_df.to_numpy()
 
     def draw(self, screen):
         rect_surface = pg.Surface((self.image_rect.width, self.image_rect.height), pg.SRCALPHA)
@@ -999,7 +994,7 @@ class Vehicle:
         else:
             self.arrived = False
             self.full_reverse = self.reverse_list[self.goals_completed]
-            self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]),
+            self.path = smooth_astar(self.mesh, (self.location[0], self.location[1]),
                                      self.goal_locs[self.goals_completed],
                                      self.goal_rotations[self.goals_completed],
                                      straighten=self.straighten, full_reverse=self.full_reverse)
