@@ -40,8 +40,7 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
 
     path = astar(mesh, m_start, m_goal)
     if len(path) == 1:  # No path found
-        print(f'Pathfinding Error: Could not find path for mesh={mesh}, start={start}, goal={goal}, straighten={straighten}, reverse_out={reverse_out}, full_reverse={full_reverse}')
-        return []
+        raise ValueError(f'Pathfinding Error: Could not find path for start={start}, goal={goal}, straighten={straighten}, reverse_out={reverse_out}, full_reverse={full_reverse}')
     smoothed_path = los_smooth_bwrd(path, mesh)
 
     if reverse_out[0] > 0:
