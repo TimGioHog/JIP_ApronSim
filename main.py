@@ -159,7 +159,7 @@ class Simulation:
                         self.button_sim_type, self.button_sim_type_2, self.button_paths, self.button_mesh]
         self.buttons.extend(self.delay_buttons)
 
-        mesh_df = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
+        mesh_df = pd.read_excel("assets/Meshes/Base_Mesh_4.xlsx", header=None)
         self.mesh = mesh_df.to_numpy()
 
         self.vehicles = []
@@ -620,7 +620,8 @@ class Simulation:
                         (655, 1370), (535, 1370), [(842, 919)], goal_rotation=[-8], reverse_out=(40, 180)))
             self.vehicles.append(
                 Vehicle('Lavatory_auto', self.scheduler.ops["Toilet_Service"], self.scheduler.ops["Toilet_Service"],
-                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=[180], straighten=30, reverse_out=(30, 0)))
+                        (655, 1370), (535, 1370), [(1055, 300)], goal_rotation=[180], straighten=30,
+                        reverse_out=(30, 0)))
             self.vehicles.append(
                 Vehicle('Water_auto', self.scheduler.ops["Water_Service"], self.scheduler.ops["Water_Service"],
                         (655, 1370), (535, 1370), [(905, 75)], goal_rotation=[80], snap=[False]))
@@ -667,6 +668,10 @@ class Simulation:
                         [(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (815, 985)],
                         max_speed=0.5, goal_rotation=[None] * 7, straighten=0, waiting_times=[230] * 7,
                         snap=[False] * 7))
+            self.vehicles.append(
+                Vehicle(f'Baggage_truck', self.scheduler.ops['Parking'], self.scheduler.ops['Offload_Front'],
+                        (655, 1370), (535, 1370), [(685, 785), (1600, 205), (1700, 900), (300, 900)],
+                        goal_rotation=[-90, 0, 90, 90], trailers=10, snap=[False, False, False, False], max_rotation=30))
 
 
 class Button:
@@ -771,9 +776,8 @@ class ButtonFlip:
 
 class Vehicle:
     def __init__(self, name: str, start_op, end_op, start_loc, end_loc, goal_locs, goal_rotation,
-                 max_speed: float = 1.3,
-                 start_velocity=0, start_rotation=-90, acceleration=1, straighten=20, waiting_times=None,
-                 reverse=None, snap=None, reverse_out=(0, 0)):
+                 max_speed: float = 1.3, start_velocity=0, start_rotation=-90, acceleration=1, straighten=20,
+                 waiting_times=None, reverse=None, snap=None, reverse_out=(0, 0), trailers=0, max_rotation=30):
         self.name = name
         self.start_operation = start_op
         self.end_operation = end_op
@@ -784,6 +788,7 @@ class Vehicle:
         self.max_speed = max_speed
         self.acceleration = acceleration
         self.image = pg.image.load(f'assets\\{name}.png').convert_alpha()
+        self.trailer_image = pg.image.load(f'assets\\Baggage_trailer_empty.png').convert_alpha()
         self.rect = self.image.get_rect()
         self.rotation = start_rotation
         self.goal_rotation_list = goal_rotation
@@ -799,6 +804,13 @@ class Vehicle:
         self.reverse_list = reverse
         self.snap = snap
         self.reverse_out = reverse_out
+        self.trailers = [Trailer(self.rotation,
+                                 (self.location[0] - 26 * np.cos(np.deg2rad(self.rotation)) - 32 * np.cos(
+                                     np.deg2rad(self.rotation)),
+                                  self.location[1] - 26 * np.sin(np.deg2rad(self.rotation)) - 32 * np.sin(
+                                      np.deg2rad(self.rotation))),
+                                 i) for i in range(trailers)]
+        self.max_rotation = max_rotation
 
         self.path = []
         self.full_reverse = False
@@ -812,6 +824,7 @@ class Vehicle:
         self.upwards = None
         self.rightwards = None
         self.goals_completed = 0
+        self.prev_steering = 0
 
         if self.walk:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
@@ -841,6 +854,9 @@ class Vehicle:
         rotated_rect = rotated_surface.get_rect(center=self.location)
         screen.blit(rotated_surface, rotated_rect.topleft)
 
+        for trailer in self.trailers:
+            trailer.draw(screen)
+
     def update(self, time_step, simulation):
         if self.path:
             if simulation.speed <= simulation.speed_limit:
@@ -858,7 +874,7 @@ class Vehicle:
                 if abs(angle_diff) > 160:
                     if self.name.startswith('Employee'):
                         self.rotation = angle
-                    else:
+                    elif not self.name.startswith('Baggage'):
                         reverse = True
                 if reverse:
                     reverse_rotation = self.rotation + 180
@@ -874,7 +890,8 @@ class Vehicle:
                     steering_factor = 0.5
                 else:
                     steering_factor = min(1.0, self.speed / 3) ** 2
-                steering = np.clip(10 * angle_diff * steering_factor * time_step, -30 * time_step, 30 * time_step)
+                steering = np.clip(10 * angle_diff * steering_factor * time_step, -self.max_rotation * time_step, self.max_rotation * time_step)
+                steering = np.clip(steering, self.prev_steering - 20*time_step, self.prev_steering + 20*time_step)
                 self.rotation += steering
 
                 # Accelerating + Braking
@@ -905,6 +922,14 @@ class Vehicle:
                 self.location[0] += tx
                 self.location[1] += ty
 
+                # Trailers
+                for trailer in self.trailers:
+                    if trailer.number == 0:
+                        prev_trailer = self
+                    else:
+                        prev_trailer = self.trailers[trailer.number - 1]
+                    trailer.update(prev_trailer, time_step, self.speed)
+
                 # Gate crossing
                 crossed_gate = self.has_crossed_gate()
                 if crossed_gate and len(self.path) > 1:
@@ -924,53 +949,56 @@ class Vehicle:
                     self.snap[self.goals_completed] = True
                 self.finish_path()
         else:  # No path
-            if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2
-                               + (self.location[1] - vehicle.location[1]) ** 2) < 400
-                       and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
-                # Skip movement due to too high sim speed
-                if ((self.start_operation.is_ready() and not self.arrived) or (
-                        self.end_operation.completed and not self.departed)) and simulation.speed > simulation.speed_limit:
-                    if self.snap is not None and self.goals_completed < len(self.snap):
-                        self.snap[self.goals_completed] = True
-                    self.finish_path()
+            self.find_path(time_step, simulation)
 
-                # Move to goal
-                elif self.start_operation.is_ready() and self.goals_completed < len(self.goal_locs) and (
-                        self.wait_time <= 0 or self.goals_completed == 0):
-                    self.arrived = False
+    def find_path(self, time_step, simulation):
+        if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2
+                           + (self.location[1] - vehicle.location[1]) ** 2) < 400
+                   and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
+            # Skip movement due to too high sim speed
+            if ((self.start_operation.is_ready() and not self.arrived) or (
+                    self.end_operation.completed and not self.departed)) and simulation.speed > simulation.speed_limit:
+                if self.snap is not None and self.goals_completed < len(self.snap):
+                    self.snap[self.goals_completed] = True
+                self.finish_path()
 
-                    if self.reverse_list is None:
-                        self.full_reverse = False
-                    else:
-                        self.full_reverse = self.reverse_list[self.goals_completed]
+            # Move to goal
+            elif self.start_operation.is_ready() and self.goals_completed < len(self.goal_locs) and (
+                    self.wait_time <= 0 or self.goals_completed == 0):
+                self.arrived = False
 
-                    self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]),
-                                             self.goal_locs[self.goals_completed],
-                                             self.goal_rotation_list[self.goals_completed],
-                                             straighten=self.straighten, full_reverse=self.full_reverse)
-                    if self.path:
-                        if len(self.path) == 1:
-                            self.create_gate(0)
-                        elif self.walk:
-                            self.create_gate(10)
-                        else:
-                            self.create_gate()
-
-                # Move to end
-                elif self.end_operation.completed and not self.departed:
+                if self.reverse_list is None:
                     self.full_reverse = False
-                    self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]),
-                                             self.end_loc, goal_rotation=90, straighten=self.straighten,
-                                             reverse_out=self.reverse_out, full_reverse=self.full_reverse)
-                    if self.path:
-                        if len(self.path) == 1:
-                            self.create_gate(0)
-                        elif self.walk:
-                            self.create_gate(10)
-                        else:
-                            self.create_gate()
-                elif self.arrived and self.wait_time > 0:
-                    self.wait_time -= time_step
+                else:
+                    self.full_reverse = self.reverse_list[self.goals_completed]
+
+                self.path = smooth_astar(self.mesh_1, (self.location[0], self.location[1]),
+                                         self.goal_locs[self.goals_completed],
+                                         self.goal_rotation_list[self.goals_completed],
+                                         straighten=self.straighten, full_reverse=self.full_reverse)
+                if self.path:
+                    if len(self.path) == 1:
+                        self.create_gate(0)
+                    elif self.walk:
+                        self.create_gate(10)
+                    else:
+                        self.create_gate()
+
+            # Move to end
+            elif self.end_operation.completed and not self.departed:
+                self.full_reverse = False
+                self.path = smooth_astar(self.mesh_2, (self.location[0], self.location[1]),
+                                         self.end_loc, goal_rotation=90, straighten=self.straighten,
+                                         reverse_out=self.reverse_out, full_reverse=self.full_reverse)
+                if self.path:
+                    if len(self.path) == 1:
+                        self.create_gate(0)
+                    elif self.walk:
+                        self.create_gate(10)
+                    else:
+                        self.create_gate()
+            elif self.arrived and self.wait_time > 0:
+                self.wait_time -= time_step
 
     def finish_path(self):
         self.path = []
@@ -1043,6 +1071,53 @@ class Vehicle:
                     return True
                 else:
                     return False
+
+
+class Trailer:
+    def __init__(self, rotation, location, trailer_number):
+        self.rotation = rotation
+        self.location = location
+        self.image = pg.image.load(f'assets\\Baggage_trailer_empty.png').convert_alpha()
+        self.number = trailer_number
+        self.expected_location = self.location
+        self.total_slip = 0.0
+
+    def update(self, prev_trailer, time_step, truck_speed):
+        angle_diff = (prev_trailer.rotation - self.rotation) % 360
+
+        if angle_diff > 180:
+            angle_diff -= 360
+        elif angle_diff < -180:
+            angle_diff += 360
+
+        # Update the trailer's rotation with some lag
+        trailer_steering_factor = truck_speed / 3
+
+        # trailer.rotation += angle_diff * 0.05 * trailer_steering_factor
+        self.rotation += np.clip(1.5 * angle_diff * trailer_steering_factor * time_step, -20 * time_step,
+                                 20 * time_step)
+
+        tx = prev_trailer.location[0] - 26 * np.cos(np.deg2rad(prev_trailer.rotation)) - 32 * np.cos(
+            np.deg2rad(self.rotation))
+        ty = prev_trailer.location[1] - 26 * np.sin(np.deg2rad(prev_trailer.rotation)) - 32 * np.sin(
+            np.deg2rad(self.rotation))
+
+        self.location = (tx, ty)
+
+        slip = 0
+
+        expected_x = self.location[0] + truck_speed * time_step * np.cos(np.deg2rad(self.rotation))
+        expected_y = self.location[1] + truck_speed * time_step * np.sin(np.deg2rad(self.rotation))
+        self.expected_location = (expected_x, expected_y)
+
+    def draw(self, screen):
+        rect_surface = pg.Surface((64, 37), pg.SRCALPHA)
+        rect_surface.blit(self.image, (0, 0))
+
+        rotated_surface = pg.transform.rotate(rect_surface, -self.rotation)
+        rotated_rect = rotated_surface.get_rect(center=self.location)
+
+        screen.blit(rotated_surface, rotated_rect.topleft)
 
 
 def load_assets():
