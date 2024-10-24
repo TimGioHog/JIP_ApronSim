@@ -615,14 +615,18 @@ class Simulation:
                 Vehicle('Catering_auto', [self.scheduler.ops["Catering_Front"], None], [None, self.scheduler.ops["Catering_Front"], None],
                         (655, 1370), goal_locs=[(845, 925), (445, 940)], goal_rotations=[-12, None], snap=[True, False], reverse=[False, True]))
             self.vehicles.append(
-                Vehicle('Lavatory_auto', [self.scheduler.ops["Toilet_Service"]], [None, self.scheduler.ops["Toilet_Service"]],
-                        (655, 1370), goal_locs=[(1055, 300)], goal_rotations=[180], straighten=30))  # reverse_out=(30, 0)))
+                Vehicle('Lavatory_auto', [self.scheduler.ops["Toilet_Service"], None], [None, None, self.scheduler.ops["Toilet_Service"]],
+                        (655, 1370), goal_locs=[(1445, 305), (1055, 305)],
+                        goal_rotations=[0, 0], reverse=[False, True], snap=[False, True], straighten=15))
             self.vehicles.append(
                 Vehicle('Water_auto', [self.scheduler.ops["Water_Service"]], [None, self.scheduler.ops["Water_Service"]],
                         (655, 1370), goal_locs=[(905, 75)], goal_rotations=[80], snap=[False]))
             self.vehicles.append(
-                Vehicle('Stairs_auto', [self.scheduler.ops["Deboard"]], [None, self.scheduler.ops["Cabin_Cleaning"]],
-                        (655, 1370), goal_locs=[(1085, 205)], goal_rotations=[171]))  # reverse_out=(25, -9)))
+                Vehicle(f'Cleaning_car_auto', [self.scheduler.ops['Cabin_Cleaning']], [None, self.scheduler.ops['Cabin_Cleaning']],
+                        (655, 1370), [(1425, 125)], goal_rotations=[70]))
+            self.vehicles.append(
+                Vehicle('Stairs_auto', [self.scheduler.ops["Deboard"], None], [None, self.scheduler.ops["Cabin_Cleaning"], None],
+                        (655, 1370), goal_locs=[(1085, 205), (1335, 165)], goal_rotations=[171, 171], reverse=[False, True]))
             self.vehicles.append(
                 Vehicle('Spot', [self.scheduler.ops["Technical_Inspection"]] + [None] * 7, [None] * 7 + [self.scheduler.ops["Technical_Inspection"]],
                         (1485, 735), goal_locs=[(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (815, 985), (1485, 735)],
@@ -643,17 +647,20 @@ class Simulation:
                         (655, 1370), goal_locs=[(837, 227), (335, 200)], goal_rotations=[5, None], snap=[True, False], reverse=[False, True]))
             self.vehicles.append(
                 Vehicle('Catering', [self.scheduler.ops["Catering_Front"], None], [None, self.scheduler.ops["Catering_Front"], None],
-                        (655, 1370), goal_locs=[(845, 925), (445, 940)], goal_rotations=[-12, None], snap=[True, False], reverse=[False, True]))
+                        (655, 1370), goal_locs=[(845, 925), (375, 940)], goal_rotations=[-12, None], snap=[True, False], reverse=[False, True]))
             self.vehicles.append(
                 Vehicle('Lavatory', [self.scheduler.ops["Toilet_Service"], None], [None, None, self.scheduler.ops["Toilet_Service"]],
                         (655, 1370), goal_locs=[(1445, 305), (1055, 305)],
                         goal_rotations=[0, 0], reverse=[False, True], snap=[False, True], straighten=15))
             self.vehicles.append(
                 Vehicle('Water', [self.scheduler.ops["Water_Service"]], [None, self.scheduler.ops["Water_Service"]],
-                        (655, 1370), goal_locs=[(905, 75)], goal_rotations=[80], snap=[False]))  # reverse_out=(20, -110)))
+                        (655, 1370), goal_locs=[(905, 75)], goal_rotations=[80], snap=[False]))
             self.vehicles.append(
-                Vehicle('Stairs', [self.scheduler.ops["Deboard"]], [None, self.scheduler.ops["Cabin_Cleaning"]],
-                        (655, 1370), goal_locs=[(1085, 205)], goal_rotations=[171]))  # reverse_out=(25, -9)))
+                Vehicle(f'Cleaning_car', [self.scheduler.ops['Cabin_Cleaning']], [None, self.scheduler.ops['Cabin_Cleaning']],
+                        (655, 1370), [(1425, 125)], goal_rotations=[70]))
+            self.vehicles.append(
+                Vehicle('Stairs', [self.scheduler.ops["Deboard"], None], [None, self.scheduler.ops["Cabin_Cleaning"], None],
+                        (655, 1370), goal_locs=[(1085, 205), (1335, 165)], goal_rotations=[171, 171], reverse=[False, True]))
             self.vehicles.append(
                 Vehicle(f'Employee_{random.randint(1, 4)}', [self.scheduler.ops["Technical_Inspection"]] + [None]*7,
                         [None]*7 + [self.scheduler.ops["Technical_Inspection"]],
@@ -666,7 +673,7 @@ class Simulation:
                         waiting_times=[30, 0, 30], reverse=[False, False, True], straighten=10))
             self.vehicles.append(
                 Vehicle(f'Baggage_truck', [self.scheduler.ops['Offload_Rear'], None, None], [None, None, self.scheduler.ops['Offload_Rear'], None],
-                        (655, 1370), [(685, 225), (305, 215), (665, 185)], goal_rotations=[-90, None, -135], trailers=3,
+                        (655, 1370), [(685, 225), (305, 215), (625, 225)], goal_rotations=[-90, None, -135], trailers=3,
                         waiting_times=[30, 0, 30], reverse=[False, False, True], straighten=10))
             self.vehicles.append(
                 Vehicle(f'Baggage_truck', [self.scheduler.ops['Load_Front'], None, None, None], [None, None, None, self.scheduler.ops['Load_Front'], None],
@@ -674,7 +681,7 @@ class Simulation:
                         waiting_times=[40, 30, 0, 30], reverse=[False, False, False, True], straighten=10, trailers_loaded=True))
             self.vehicles.append(
                 Vehicle(f'Baggage_truck', [self.scheduler.ops['Load_Rear'], None, None, None], [None, None, None, self.scheduler.ops['Load_Rear'], None],
-                        (655, 1370), [(285, 465), (685, 225), (305, 215), (665, 185)], goal_rotations=[-90, -90, None, -135], trailers=3,
+                        (655, 1370), [(285, 465), (685, 225), (305, 215), (625, 225)], goal_rotations=[-90, -90, None, -135], trailers=3,
                         waiting_times=[50, 30, 0, 30], reverse=[False, False, False, True], straighten=10, trailers_loaded=True))
 
 
@@ -780,7 +787,7 @@ class ButtonFlip:
 
 class Vehicle:
     def __init__(self, name: str, start_ops: list, end_ops: list, start_loc, goal_locs, goal_rotations,
-                 max_speed: float = 1.3, start_velocity=0, start_rotation=-90, acceleration=1, straighten=20, max_rotation=30,
+                 max_speed: float = 1.1, start_velocity=0, start_rotation=-90, acceleration=1, straighten=20, max_rotation=30,
                  waiting_times: list = None, reverse: list = None, snap: list = None, trailers=0, trailers_loaded=False, service_road_end=True):
 
         # Standard parameters
@@ -919,7 +926,7 @@ class Vehicle:
                 if self.walking:
                     steering_factor = 1
                 else:
-                    steering_factor = min(1.0, self.speed / 3) ** 2
+                    steering_factor = min(1.0, abs(self.speed / 3))
                 steering = np.clip(10 * angle_diff * steering_factor * time_step, -self.max_rotation * time_step, self.max_rotation * time_step)
                 steering = np.clip(steering, self.prev_steering - 20 * time_step, self.prev_steering + 20 * time_step)
                 self.rotation += steering
@@ -981,13 +988,13 @@ class Vehicle:
                             trailer.move(simulation)
                         elif self.goals_completed == 3:
                             trailer.loaded = True
-                            trailer.move_back(simulation)
+                            trailer.move_back(simulation, self)
                     elif self.start_ops[0].name.startswith('Load'):
                         if self.goals_completed == 2:
                             trailer.move(simulation)
                         elif self.goals_completed == 4:
                             trailer.loaded = False
-                            trailer.move_back(simulation)
+                            trailer.move_back(simulation, self)
 
             if self.arrived and self.wait_time > 0:
                 self.wait_time -= time_step
@@ -1052,13 +1059,6 @@ class Vehicle:
                     trailer.connected = False
                 elif self.goals_completed == 4:
                     trailer.connected = True
-
-            if trailer.connected:
-                if trailer.number == 0:
-                    prev_trailer = self
-                else:
-                    prev_trailer = self.trailers[trailer.number - 1]
-                trailer.update(prev_trailer, 0, self.speed)
 
     def create_gate(self, distance=80):
         x1, y1 = self.location
@@ -1133,7 +1133,6 @@ class Trailer:
         self.loaded = loaded
 
         self.connected = True
-        self.moved = False
         self.move_start_time = None
         self.move_start_loc = None
         self.move_start_rotation = None
@@ -1221,16 +1220,22 @@ class Trailer:
         time_passed = simulation.timer - self.move_start_time
         perc_completed = time_passed/duration
         if time_passed > duration:
-            self.moved = True
+            self.move_start_time = None
             self.location = (self.goal[0], self.goal[1])
             self.rotation = self.goal[2]
         else:
             self.location = (self.move_start_loc[0] + self.move_dx * perc_completed, self.move_start_loc[1] + self.move_dy * perc_completed)
             self.rotation = self.move_start_rotation + self.move_dr * perc_completed
 
-    def move_back(self, simulation):
-        self.location = self.move_start_loc
-        self.rotation = self.move_start_rotation
+    def move_back(self, simulation, truck):
+        if self.number == 0:
+            pass
+        if self.move_start_time is None:
+            self.goal = (truck.location[0] - 30 * np.cos(np.deg2rad(truck.rotation)) - 30 * np.cos(np.deg2rad(-90)) - (60 * np.cos(np.deg2rad(-90))) * self.number,
+                         truck.location[1] - 30 * np.sin(np.deg2rad(truck.rotation)) - 30 * np.sin(np.deg2rad(-90)) - (60 * np.sin(np.deg2rad(-90))) * self.number,
+                         -90)
+
+        self.move(simulation)
 
 
 def load_assets():
