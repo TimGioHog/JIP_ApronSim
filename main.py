@@ -444,7 +444,6 @@ class Simulation:
             rect_surface.fill(pg.Color(0, 0, 0, 150))
             self.screen.blit(rect_surface, (800, 1020))
             self.button_sim_type_2.draw(self.screen, self.new_sim)
-        pg.display.flip()
 
     def event_handler(self):
         for event in pg.event.get():
@@ -499,6 +498,7 @@ class Simulation:
         for vehicle in self.vehicles:
             if not vehicle.departed:
                 vehicle.update(time_passed, self)
+        pg.display.flip()
 
     def run(self):
         print("Running...")
@@ -662,8 +662,8 @@ class Simulation:
                 Vehicle('Stairs', [self.scheduler.ops["Deboard"], None], [None, self.scheduler.ops["Cabin_Cleaning"], None],
                         (655, 1370), goal_locs=[(1085, 205), (1335, 165)], goal_rotations=[171, 171], reverse=[False, True]))
             self.vehicles.append(
-                Vehicle(f'Employee_{random.randint(1, 4)}', [self.scheduler.ops["Technical_Inspection"]] + [None]*7,
-                        [None]*7 + [self.scheduler.ops["Technical_Inspection"]],
+                Vehicle(f'Employee_{random.randint(1, 4)}', [self.scheduler.ops["Technical_Inspection"]] + [None] * 7,
+                        [None] * 7 + [self.scheduler.ops["Technical_Inspection"]],
                         (1485, 735), goal_locs=[(1085, 715), (1065, 405), (1125, 145), (855, 145), (855, 405), (845, 715), (815, 985), (1485, 735)],
                         max_speed=0.5, goal_rotations=[None] * 8, straighten=0, waiting_times=[230] * 8,
                         snap=[False] * 8, service_road_end=False))
@@ -787,16 +787,16 @@ class ButtonFlip:
 
 class Vehicle:
     def __init__(self, name: str, start_ops: list, end_ops: list, start_loc, goal_locs, goal_rotations,
-                 max_speed: float = 1.1, start_velocity=0, start_rotation=-90, acceleration=1, straighten=20, max_rotation=30,
+                 max_speed: float = 1.1, start_velocity=0, start_rotation=-90, acceleration=0.5, straighten=20, max_rotation=30,
                  waiting_times: list = None, reverse: list = None, snap: list = None, trailers=0, trailers_loaded=False, service_road_end=True):
 
         # Standard parameters
-        self.name               = name
-        self.max_speed          = max_speed
-        self.acceleration       = acceleration
-        self.image              = pg.image.load(f'assets\\{name}.png').convert_alpha()
-        self.image_rect         = self.image.get_rect()
-        self.straighten         = straighten
+        self.name = name
+        self.max_speed = max_speed
+        self.acceleration = acceleration
+        self.image = pg.image.load(f'assets\\{name}.png').convert_alpha()
+        self.image_rect = self.image.get_rect()
+        self.straighten = straighten
         self.max_rotation = max_rotation
 
         # Goal specific
@@ -833,10 +833,10 @@ class Vehicle:
         assert len(self.goal_locs) == len(self.end_ops)
 
         # Start parameters
-        self.location   = [start_loc[0], start_loc[1]]
-        self.rotation   = start_rotation
-        self.speed      = start_velocity
-        self.wait_time  = self.waiting_times[0]
+        self.location = [start_loc[0], start_loc[1]]
+        self.rotation = start_rotation
+        self.speed = start_velocity
+        self.wait_time = self.waiting_times[0]
         self.trailers = [Trailer(self.rotation, self.location, i, trailers_loaded, self) for i in range(trailers)]
 
         # Variable initialisation
@@ -844,6 +844,7 @@ class Vehicle:
         self.full_reverse = False
         self.arrived = False
         self.departed = False
+        self.stopped = False
         self.gate_center = None
         self.gate_slope = None
         self.gate_dx = None
@@ -854,7 +855,7 @@ class Vehicle:
         self.goals_completed = 0
         self.end_goals_completed = 0
         self.prev_steering = 0
-
+        self.stop_counter = 0
         if self.name in ['Spot', 'Employee_1', 'Employee_2', 'Employee_3', 'Employee_4']:
             self.walking = True
         else:
@@ -886,10 +887,68 @@ class Vehicle:
 
         for trailer in self.trailers:
             trailer.draw(screen)
+        if self.stopped:
+            pg.draw.circle(screen, (255, 100, 0), self.location, 10)
 
     def update(self, time_step, simulation):
         if self.path:
             if simulation.speed <= simulation.speed_limit:
+                stop = False
+                if self.full_reverse:
+                    heading = self.rotation - 180 if self.rotation > 0 else self.rotation + 180
+                else:
+                    heading = self.rotation
+                simulation.screen.blit(small_font.render(str(round(heading, 2)), True, (0, 255, 0)), (self.location[0], self.location[1]))
+
+                i = -1
+                for truck in simulation.vehicles:
+                    if not truck == self and len(truck.path) >= 1:
+                        i += 1
+                        truck_n_trailers = [truck] + truck.trailers
+                        angle_to_vehicle = 0
+                        distance = 0
+                        angle_difference = 0
+                        for vehicle in truck_n_trailers:
+                            distance = np.sqrt((vehicle.location[0] - self.location[0]) ** 2 + (vehicle.location[1] - self.location[1]) ** 2)
+
+                            angle_to_vehicle = np.arctan2((vehicle.location[1] - self.location[1]), (vehicle.location[0] - self.location[0]))
+                            angle_to_vehicle = np.rad2deg(angle_to_vehicle)
+                            angle_difference = heading - angle_to_vehicle
+                            if angle_difference > 180:
+                                angle_difference -= 360
+                            elif angle_difference < -180:
+                                angle_difference += 360
+
+                            if truck.full_reverse:
+                                heading_2 = vehicle.rotation - 180 if vehicle.rotation > 0 else vehicle.rotation + 180
+                            else:
+                                heading_2 = vehicle.rotation
+                            angle_to_vehicle_2 = np.arctan2((self.location[1] - vehicle.location[1]), (self.location[0] - vehicle.location[0]))
+                            angle_to_vehicle_2 = np.rad2deg(angle_to_vehicle_2)
+                            angle_difference_2 = heading_2 - angle_to_vehicle_2
+                            if angle_difference_2 > 180:
+                                angle_difference_2 -= 360
+                            elif angle_difference_2 < -180:
+                                angle_difference_2 += 360
+
+                            if ((-60 < angle_difference < 60 and (-60 < angle_difference_2 < 60) and distance < 200 and not truck.stopped)
+                                    or (-30 < angle_difference < 30 and (-30 < angle_difference_2 < 30) and distance < 400 and not truck.stopped)
+                                    or (-35 < angle_difference < 35 and distance < 300 and not truck.stopped)
+                                    or (-10 < angle_difference < 10 and distance < 250)
+                                    or distance < 10):
+                                stop = True
+                                break
+                        simulation.screen.blit(small_font.render(str(round(angle_to_vehicle, 2)), True, (255, 0, 0)), (self.location[0], self.location[1] + 20 + (60*i)))
+                        simulation.screen.blit(small_font.render(str(round(distance, 2)), True, (0, 100, 255)), (self.location[0], self.location[1] + 40 + (60*i)))
+                        simulation.screen.blit(small_font.render(str(round(angle_difference, 2)), True, (0, 0, 0)), (self.location[0], self.location[1] + 60 + (60*i)))
+                if stop:
+                    self.stopped = True
+                    self.stop_counter = 3
+                elif self.stop_counter > 0:
+                    self.stop_counter -= time_step
+                else:
+                    self.stopped = False
+
                 dx = self.path[0][0] - self.location[0]
                 dy = self.path[0][1] - self.location[1]
                 angle = np.rad2deg(np.arctan2(dy, dx))
@@ -936,7 +995,12 @@ class Vehicle:
                     (self.path[-1][0] - self.location[0]) ** 2 + (self.path[-1][1] - self.location[1]) ** 2)
                 brake_speed = ((self.max_speed - 0.1) / 200) * dist_goal + 0.1
 
-                if (not reverse and self.speed > brake_speed) or (reverse and self.speed < -brake_speed):
+                if self.stopped:
+                    if reverse:
+                        self.speed = min(self.speed + self.acceleration * time_step, 0)
+                    else:
+                        self.speed = max(self.speed - self.acceleration * time_step, 0)
+                elif (not reverse and self.speed > brake_speed) or (reverse and self.speed < -brake_speed):
                     if reverse:
                         self.speed = max(self.speed, -brake_speed)
                     else:
@@ -1001,7 +1065,7 @@ class Vehicle:
             elif ((self.start_ops[self.goals_completed] is None or self.start_ops[self.goals_completed].is_ready())
                   and (self.end_ops[self.goals_completed] is None or self.end_ops[self.goals_completed].completed)):
                 # Check for vehicles moving nearby
-                if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (self.location[1] - vehicle.location[1]) ** 2) < 400
+                if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (self.location[1] - vehicle.location[1]) ** 2) < 200
                            and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
                     self.find_path(simulation)
 
@@ -1184,7 +1248,7 @@ class Trailer:
 
         self.location = (tx, ty)
 
-        slip = np.sqrt((expected_x - tx)**2 + (expected_y - ty)**2)
+        slip = np.sqrt((expected_x - tx) ** 2 + (expected_y - ty) ** 2)
         self.total_slip += slip * time_step
 
         self.previous_rotation = self.rotation
@@ -1218,7 +1282,7 @@ class Trailer:
 
         duration = 30
         time_passed = simulation.timer - self.move_start_time
-        perc_completed = time_passed/duration
+        perc_completed = time_passed / duration
         if time_passed > duration:
             self.move_start_time = None
             self.location = (self.goal[0], self.goal[1])
@@ -1228,8 +1292,6 @@ class Trailer:
             self.rotation = self.move_start_rotation + self.move_dr * perc_completed
 
     def move_back(self, simulation, truck):
-        if self.number == 0:
-            pass
         if self.move_start_time is None:
             self.goal = (truck.location[0] - 30 * np.cos(np.deg2rad(truck.rotation)) - 30 * np.cos(np.deg2rad(-90)) - (60 * np.cos(np.deg2rad(-90))) * self.number,
                          truck.location[1] - 30 * np.sin(np.deg2rad(truck.rotation)) - 30 * np.sin(np.deg2rad(-90)) - (60 * np.sin(np.deg2rad(-90))) * self.number,
