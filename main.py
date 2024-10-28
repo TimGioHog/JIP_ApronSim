@@ -21,6 +21,7 @@ klm_rgb = (0, 161, 228)
 op_list_margin = 24
 op_list_start = 160
 display_mesh = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
+random.seed(time.time())
 
 
 class Operation:
@@ -164,6 +165,7 @@ class Simulation:
 
         self.vehicles = []
         self.create_vehicles()
+        self.employees = [f'Employee_{random.randint(1, 4)}' for i in range(5)]
 
         self.mesh_surface = pg.Surface((1920, 1080), pg.SRCALPHA)
         for y, row in enumerate(self.mesh):
@@ -191,7 +193,14 @@ class Simulation:
                 self.screen.blit(self.images['Cone'], (1075, 700))
             if self.scheduler.ops['Connect_PCA'].completed and not self.scheduler.ops['Remove_PCA'].completed:
                 self.screen.blit(self.images['PCA_tube'], (965, 660))
-
+            if self.scheduler.ops['Connect_LDL_Front'].completed and not self.scheduler.ops['Load_Front'].completed:
+                draw_rotated(self.images[self.employees[0]], (800, 775), 90, self.screen)
+                draw_rotated(self.images[self.employees[1]], (850, 870), -135, self.screen)
+            if self.scheduler.ops['Connect_LDL_Rear'].completed and not self.scheduler.ops['Load_Rear'].completed:
+                draw_rotated(self.images[self.employees[2]], (800, 285), 90, self.screen)
+                draw_rotated(self.images[self.employees[3]], (850, 375), -135, self.screen)
+            if self.scheduler.ops['Refuel_Prep'].completed and not self.scheduler.ops['Refuel_Finalising'].completed:
+                draw_rotated(self.images[self.employees[4]], (625, 585), 40, self.screen)
         # New Sim: Rail chocks, Baggage Pit, GPU & PCA cables
         else:
             self.screen.blit(self.images['Rail_chock'], (865, 481))
@@ -444,6 +453,7 @@ class Simulation:
             rect_surface.fill(pg.Color(0, 0, 0, 150))
             self.screen.blit(rect_surface, (800, 1020))
             self.button_sim_type_2.draw(self.screen, self.new_sim)
+        pg.display.flip()
 
     def event_handler(self):
         for event in pg.event.get():
@@ -498,7 +508,6 @@ class Simulation:
         for vehicle in self.vehicles:
             if not vehicle.departed:
                 vehicle.update(time_passed, self)
-        pg.display.flip()
 
     def run(self):
         print("Running...")
@@ -879,11 +888,7 @@ class Vehicle:
             self.mesh = mesh_df.to_numpy()
 
     def draw(self, screen):
-        rect_surface = pg.Surface((self.image_rect.width, self.image_rect.height), pg.SRCALPHA)
-        rect_surface.blit(self.image, (0, 0))
-        rotated_surface = pg.transform.rotate(rect_surface, -self.rotation)
-        rotated_rect = rotated_surface.get_rect(center=self.location)
-        screen.blit(rotated_surface, rotated_rect.topleft)
+        draw_rotated(self.image, self.location, self.rotation, screen)
 
         for trailer in self.trailers:
             trailer.draw(screen)
@@ -894,53 +899,34 @@ class Vehicle:
         if self.path:
             if simulation.speed <= simulation.speed_limit:
                 stop = False
-                if self.full_reverse:
-                    heading = self.rotation - 180 if self.rotation > 0 else self.rotation + 180
-                else:
-                    heading = self.rotation
-                simulation.screen.blit(small_font.render(str(round(heading, 2)), True, (0, 255, 0)), (self.location[0], self.location[1]))
+                # if self.full_reverse:
+                #     heading = self.rotation - 180 if self.rotation > 0 else self.rotation + 180
+                # else:
+                #     heading = self.rotation
+                # simulation.screen.blit(small_font.render(str(round(heading, 2)), True, (0, 255, 0)), (self.location[0], self.location[1]))
 
-                i = -1
+                # i = -1
                 for truck in simulation.vehicles:
                     if not truck == self and len(truck.path) >= 1:
-                        i += 1
+                        # i += 1
                         truck_n_trailers = [truck] + truck.trailers
-                        angle_to_vehicle = 0
-                        distance = 0
-                        angle_difference = 0
+                        # angle_to_vehicle = 0
+                        # distance = 0
+                        # angle_difference = 0
                         for vehicle in truck_n_trailers:
                             distance = np.sqrt((vehicle.location[0] - self.location[0]) ** 2 + (vehicle.location[1] - self.location[1]) ** 2)
 
-                            angle_to_vehicle = np.arctan2((vehicle.location[1] - self.location[1]), (vehicle.location[0] - self.location[0]))
-                            angle_to_vehicle = np.rad2deg(angle_to_vehicle)
-                            angle_difference = heading - angle_to_vehicle
-                            if angle_difference > 180:
-                                angle_difference -= 360
-                            elif angle_difference < -180:
-                                angle_difference += 360
-
-                            if truck.full_reverse:
-                                heading_2 = vehicle.rotation - 180 if vehicle.rotation > 0 else vehicle.rotation + 180
-                            else:
-                                heading_2 = vehicle.rotation
-                            angle_to_vehicle_2 = np.arctan2((self.location[1] - vehicle.location[1]), (self.location[0] - vehicle.location[0]))
-                            angle_to_vehicle_2 = np.rad2deg(angle_to_vehicle_2)
-                            angle_difference_2 = heading_2 - angle_to_vehicle_2
-                            if angle_difference_2 > 180:
-                                angle_difference_2 -= 360
-                            elif angle_difference_2 < -180:
-                                angle_difference_2 += 360
+                            angle_difference = heading_angle(self, vehicle)
+                            angle_difference_2 = heading_angle(vehicle, self)
 
                             if ((-60 < angle_difference < 60 and (-60 < angle_difference_2 < 60) and distance < 200 and not truck.stopped)
                                     or (-30 < angle_difference < 30 and (-30 < angle_difference_2 < 30) and distance < 400 and not truck.stopped)
-                                    or (-35 < angle_difference < 35 and distance < 300 and not truck.stopped)
-                                    or (-10 < angle_difference < 10 and distance < 250)
-                                    or distance < 10):
+                                    or (-25 < angle_difference < 25 and distance < 300 and not truck.stopped)):
                                 stop = True
                                 break
-                        simulation.screen.blit(small_font.render(str(round(angle_to_vehicle, 2)), True, (255, 0, 0)), (self.location[0], self.location[1] + 20 + (60*i)))
-                        simulation.screen.blit(small_font.render(str(round(distance, 2)), True, (0, 100, 255)), (self.location[0], self.location[1] + 40 + (60*i)))
-                        simulation.screen.blit(small_font.render(str(round(angle_difference, 2)), True, (0, 0, 0)), (self.location[0], self.location[1] + 60 + (60*i)))
+                        # simulation.screen.blit(small_font.render(str(round(angle_to_vehicle, 2)), True, (255, 0, 0)), (self.location[0], self.location[1] + 20 + (60*i)))
+                        # simulation.screen.blit(small_font.render(str(round(distance, 2)), True, (0, 100, 255)), (self.location[0], self.location[1] + 40 + (60*i)))
+                        # simulation.screen.blit(small_font.render(str(round(angle_difference, 2)), True, (0, 0, 0)), (self.location[0], self.location[1] + 60 + (60*i)))
                 if stop:
                     self.stopped = True
                     self.stop_counter = 3
@@ -1065,7 +1051,7 @@ class Vehicle:
             elif ((self.start_ops[self.goals_completed] is None or self.start_ops[self.goals_completed].is_ready())
                   and (self.end_ops[self.goals_completed] is None or self.end_ops[self.goals_completed].completed)):
                 # Check for vehicles moving nearby
-                if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (self.location[1] - vehicle.location[1]) ** 2) < 200
+                if not any(np.sqrt((self.location[0] - vehicle.location[0]) ** 2 + (self.location[1] - vehicle.location[1]) ** 2) < 400
                            and len(vehicle.path) >= 1 for vehicle in simulation.vehicles):
                     self.find_path(simulation)
 
@@ -1184,6 +1170,7 @@ class Vehicle:
 class Trailer:
     def __init__(self, rotation, location, trailer_number, loaded, truck):
         self.rotation = rotation
+        self.truck = truck
 
         self.image_empty = pg.image.load(f'assets\\Baggage_trailer_empty.png').convert_alpha()
         self.image_full = pg.image.load(f'assets\\Baggage_trailer_full.png').convert_alpha()
@@ -1298,6 +1285,34 @@ class Trailer:
                          -90)
 
         self.move(simulation)
+
+
+def draw_rotated(image, location, rotation, screen):
+    image_rect = image.get_rect()
+    rect_surface = pg.Surface((image_rect.width, image_rect.height), pg.SRCALPHA)
+    rect_surface.blit(image, (0, 0))
+    rotated_surface = pg.transform.rotate(rect_surface, -rotation)
+    rotated_rect = rotated_surface.get_rect(center=location)
+    screen.blit(rotated_surface, rotated_rect.topleft)
+
+
+def heading_angle(vehicle_1, vehicle_2):
+    if isinstance(vehicle_1, Trailer):
+        reversing = vehicle_1.truck.full_reverse
+    else:
+        reversing = vehicle_1.full_reverse
+    if reversing:
+        heading = vehicle_1.rotation - 180 if vehicle_1.rotation > 0 else vehicle_1.rotation + 180
+    else:
+        heading = vehicle_1.rotation
+    angle_to_vehicle = np.arctan2((vehicle_1.location[1] - vehicle_2.location[1]), (vehicle_1.location[0] - vehicle_2.location[0]))
+    angle_to_vehicle = np.rad2deg(angle_to_vehicle)
+    angle_diff = heading - angle_to_vehicle
+    if angle_diff > 180:
+        angle_diff -= 360
+    elif angle_diff < -180:
+        angle_diff += 360
+    return angle_diff
 
 
 def load_assets():
