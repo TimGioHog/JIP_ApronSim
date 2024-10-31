@@ -20,7 +20,7 @@ black = (0, 0, 0)
 klm_rgb = (0, 161, 228)
 op_list_margin = 24
 op_list_start = 160
-display_mesh = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
+display_mesh = pd.read_excel("assets/Meshes/Mesh_4.xlsx", header=None)
 random.seed(time.time())
 
 
@@ -215,9 +215,12 @@ class Simulation:
                     self.screen.blit(self.images['Baggage_pit_extended'], (769, 314))
                 elif self.scheduler.ops["Remove_LDL_Rear"].start_time is not None:
                     time_passed = self.timer - self.scheduler.ops["Remove_LDL_Rear"].start_time
-                    self.screen.blit(self.images['Baggage_pit_extended'], (
-                        max(769 - (((769 - 625) / self.scheduler.ops["Remove_LDL_Rear"].duration) * time_passed), 625),
-                        314))
+                    if time_passed > 0:
+                        self.screen.blit(self.images['Baggage_pit_extended'], (
+                            max(769 - (((769 - 625) / self.scheduler.ops["Remove_LDL_Rear"].duration) * time_passed), 625),
+                            314))
+                    else:
+                        self.screen.blit(self.images['Baggage_pit_extended'], (769, 314))
                 else:
                     time_passed = self.timer - self.scheduler.ops["Connect_LDL_Rear"].start_time
                     self.screen.blit(self.images['Baggage_pit_extended'], (
@@ -233,9 +236,12 @@ class Simulation:
                     self.screen.blit(self.images['Baggage_pit_extended'], (769, 815))
                 elif self.scheduler.ops["Remove_LDL_Rear"].start_time is not None:
                     time_passed = self.timer - self.scheduler.ops["Remove_LDL_Front"].start_time
-                    self.screen.blit(self.images['Baggage_pit_extended'], (
-                        max(769 - (((769 - 625) / self.scheduler.ops["Remove_LDL_Front"].duration) * time_passed), 625),
-                        815))
+                    if time_passed > 0:
+                        self.screen.blit(self.images['Baggage_pit_extended'], (
+                            max(769 - (((769 - 625) / self.scheduler.ops["Remove_LDL_Front"].duration) * time_passed), 625),
+                            815))
+                    else:
+                        self.screen.blit(self.images['Baggage_pit_extended'], (769, 815))
 
                 else:
                     time_passed = self.timer - self.scheduler.ops["Connect_LDL_Front"].start_time
@@ -251,16 +257,18 @@ class Simulation:
             pg.draw.line(self.screen, (255, 233, 38), (1238, 767), self.vehicles[0].location, width=10)
             pg.draw.line(self.screen, (255, 233, 38), (890, 1005), self.vehicles[1].location, width=3)
 
-        # Vehicles
-        for vehicle in self.vehicles:
-            vehicle.draw(self.screen)
-
-        # Baggage
-        self.belt_front.draw(self.screen)
-        self.belt_rear.draw(self.screen)
         if self.new_sim:
+            self.belt_front.draw(self.screen)
+            self.belt_rear.draw(self.screen)
             self.screen.blit(self.images['Baggage_pit_cover_rear'], (620, 301))
             self.screen.blit(self.images['Baggage_pit_cover_front'], (620, 802))
+            for vehicle in self.vehicles:
+                vehicle.draw(self.screen)
+        else:
+            for vehicle in self.vehicles:
+                vehicle.draw(self.screen)
+            self.belt_front.draw(self.screen)
+            self.belt_rear.draw(self.screen)
 
         # PCA and GPU Units
         self.screen.blit(self.images['PCA_unit'], (1237, 750))
@@ -368,6 +376,7 @@ class Simulation:
         self.button_speed_increase.draw(self.screen)
 
         # Delay buttons
+        self.screen.blit(medium_font.render(f'Delays:', True, white), (10, 120))
         for button in self.delay_buttons:
             button.draw(self.screen)
         self.button_reset_delays.draw(self.screen)
@@ -387,7 +396,7 @@ class Simulation:
         self.screen.blit(medium_font.render(f'Speed: {self.speed}x', True, white), (10, 60))
 
         # FPS Counter
-        self.screen.blit(small_font.render(f'{int(self.fps)}', True, white), (210, 10))
+        self.screen.blit(small_font.render(f'fps: {int(self.fps)}', True, white), (190, 10))
 
         # Pathfinding overlay
         if self.blit_paths:
@@ -451,8 +460,8 @@ class Simulation:
         else:
             rect_surface = pg.Surface((320, 60), pg.SRCALPHA)
             rect_surface.fill(pg.Color(0, 0, 0, 150))
-            self.screen.blit(rect_surface, (800, 1020))
-            self.button_sim_type_2.draw(self.screen, self.new_sim)
+            # self.screen.blit(rect_surface, (800, 1020))
+            # self.button_sim_type_2.draw(self.screen, self.new_sim)
         pg.display.flip()
 
     def event_handler(self):
@@ -515,7 +524,7 @@ class Simulation:
         if self.scheduler.ops['Connect_LDL_Front'].completed and self.scheduler.ops['Remove_LDL_Front'].start_time is None:
             if self.scheduler.ops['Offload_Front'].start_time is not None and not self.scheduler.ops['Offload_Front'].completed:
                 new_front_status = 'Unload'
-            elif self.scheduler.ops['Load_Front'].start_time is not None and not self.scheduler.ops['Load_Front'].completed:
+            elif self.scheduler.ops['Load_Front'].start_time is not None and self.scheduler.ops['Load_Front'].time_left > 30:
                 new_front_status = 'Load'
             else:
                 new_front_status = None
@@ -524,7 +533,7 @@ class Simulation:
         if self.scheduler.ops['Connect_LDL_Rear'].completed and self.scheduler.ops['Remove_LDL_Rear'].start_time is None:
             if self.scheduler.ops['Offload_Rear'].start_time is not None and not self.scheduler.ops['Offload_Rear'].completed:
                 new_rear_status = 'Unload'
-            elif self.scheduler.ops['Load_Rear'].start_time is not None and not self.scheduler.ops['Load_Rear'].completed:
+            elif self.scheduler.ops['Load_Rear'].start_time is not None and self.scheduler.ops['Load_Rear'].time_left > 30:
                 new_rear_status = 'Load'
             else:
                 new_rear_status = None
@@ -936,8 +945,6 @@ class Vehicle:
 
         for trailer in self.trailers:
             trailer.draw(screen)
-        if self.stopped:
-            pg.draw.circle(screen, (255, 100, 0), self.location, 10)
 
     def update(self, time_step, simulation):
         if self.path:
@@ -1385,7 +1392,7 @@ class Bag:
     def update(self, time_step, activity):
         if activity == 'Unload' or activity == 'Finish_Unload':
             self.location = (self.location[0] - 25 * 0.4 * time_step, self.location[1])
-        elif activity == 'Load'or activity == 'Finish_Load':
+        elif activity == 'Load' or activity == 'Finish_Load':
             self.location = (self.location[0] + 25 * 0.4 * time_step, self.location[1])
 
     def draw(self, screen):
