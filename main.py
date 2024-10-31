@@ -178,6 +178,9 @@ class Simulation:
                         rect_surface.fill(pg.Color(100, 255, 100, 100))
                     self.mesh_surface.blit(rect_surface, (x * 10, (y - 20) * 10))
 
+        self.belt_front = Belt('Front')
+        self.belt_rear = Belt('Rear')
+
     def draw(self):
         self.screen.fill('Black')
         self.screen.blit(self.images['apron'], self.rects['apron'])
@@ -209,47 +212,55 @@ class Simulation:
 
             if self.scheduler.ops['Connect_LDL_Rear'].start_time is not None and not self.scheduler.ops['Remove_LDL_Rear'].completed:
                 if self.scheduler.ops['Offload_Rear'].start_time is not None and not self.scheduler.ops['Load_Rear'].completed:
-                    self.screen.blit(self.images['Baggage_pit_extended'], (769, 304))
+                    self.screen.blit(self.images['Baggage_pit_extended'], (769, 314))
                 elif self.scheduler.ops["Remove_LDL_Rear"].start_time is not None:
                     time_passed = self.timer - self.scheduler.ops["Remove_LDL_Rear"].start_time
                     self.screen.blit(self.images['Baggage_pit_extended'], (
                         max(769 - (((769 - 625) / self.scheduler.ops["Remove_LDL_Rear"].duration) * time_passed), 625),
-                        304))
-                    self.screen.blit(self.images['Baggage_pit_cover_rear'], (620, 291))
+                        314))
                 else:
                     time_passed = self.timer - self.scheduler.ops["Connect_LDL_Rear"].start_time
                     self.screen.blit(self.images['Baggage_pit_extended'], (
                         min(625 + (((769 - 625) / self.scheduler.ops["Connect_LDL_Rear"].duration) * time_passed), 769),
-                        304))
-                    self.screen.blit(self.images['Baggage_pit_cover_rear'], (620, 291))
+                        314))
 
-                self.screen.blit(self.images['Baggage_pit_open'], (712, 290))
+                self.screen.blit(self.images['Baggage_pit_open'], (712, 300))
             else:
-                self.screen.blit(self.images['Baggage_pit'], (712, 290))
+                self.screen.blit(self.images['Baggage_pit'], (712, 300))
+
             if self.scheduler.ops['Connect_LDL_Front'].start_time is not None and not self.scheduler.ops['Remove_LDL_Front'].completed:
                 if self.scheduler.ops['Offload_Front'].start_time is not None and not self.scheduler.ops['Load_Front'].completed:
-                    self.screen.blit(self.images['Baggage_pit_extended'], (769, 810))
+                    self.screen.blit(self.images['Baggage_pit_extended'], (769, 815))
                 elif self.scheduler.ops["Remove_LDL_Rear"].start_time is not None:
                     time_passed = self.timer - self.scheduler.ops["Remove_LDL_Front"].start_time
                     self.screen.blit(self.images['Baggage_pit_extended'], (
                         max(769 - (((769 - 625) / self.scheduler.ops["Remove_LDL_Front"].duration) * time_passed), 625),
-                        810))
-                    self.screen.blit(self.images['Baggage_pit_cover_front'], (620, 797))
+                        815))
 
                 else:
                     time_passed = self.timer - self.scheduler.ops["Connect_LDL_Front"].start_time
                     self.screen.blit(self.images['Baggage_pit_extended'], (
                         min(625 + (((769 - 625) / self.scheduler.ops["Connect_LDL_Front"].duration) * time_passed),
                             769),
-                        810))
-                    self.screen.blit(self.images['Baggage_pit_cover_front'], (620, 797))
+                        815))
 
-                self.screen.blit(self.images['Baggage_pit_open'], (712, 796))
+                self.screen.blit(self.images['Baggage_pit_open'], (712, 801))
             else:
-                self.screen.blit(self.images['Baggage_pit'], (712, 796))
+                self.screen.blit(self.images['Baggage_pit'], (712, 801))
 
             pg.draw.line(self.screen, (255, 233, 38), (1238, 767), self.vehicles[0].location, width=10)
             pg.draw.line(self.screen, (255, 233, 38), (890, 1005), self.vehicles[1].location, width=3)
+
+        # Vehicles
+        for vehicle in self.vehicles:
+            vehicle.draw(self.screen)
+
+        # Baggage
+        self.belt_front.draw(self.screen)
+        self.belt_rear.draw(self.screen)
+        if self.new_sim:
+            self.screen.blit(self.images['Baggage_pit_cover_rear'], (620, 301))
+            self.screen.blit(self.images['Baggage_pit_cover_front'], (620, 802))
 
         # PCA and GPU Units
         self.screen.blit(self.images['PCA_unit'], (1237, 750))
@@ -258,10 +269,6 @@ class Simulation:
         # Hydrant piping
         if self.scheduler.ops['Refuel_Prep'].completed and not self.scheduler.ops['Refuel_Finalising'].completed:
             self.screen.blit(self.images['Hydrant_pipes'], (588, 561))
-
-        # Vehicles
-        for vehicle in self.vehicles:
-            vehicle.draw(self.screen)
 
         # Pushback Tug rendering
         if self.new_sim:
@@ -308,13 +315,6 @@ class Simulation:
                     987),
                 max(896 - (((896 - 854) / self.scheduler.ops["Connect_Bridge"].duration) * time_passed),
                     854)))
-
-        # # Catering rendering
-        # if self.scheduler.ops['Catering_Front'].is_ready() and not self.scheduler.ops['Catering_Front'].completed:
-        #     self.screen.blit(self.images['Catering'], (760, 870))
-        #
-        # if self.scheduler.ops['Catering_Rear'].is_ready() and not self.scheduler.ops['Catering_Rear'].completed:
-        #     self.screen.blit(self.images['Catering'], (757, 196))
 
         rect_surface = pg.Surface((250, 1080), pg.SRCALPHA)
         rect_surface.fill(pg.Color(0, 0, 0, 150))
@@ -502,12 +502,34 @@ class Simulation:
                     self.button_sim_type_2.handle_event(event)
 
     def update(self, duration):
-        time_passed = duration * self.speed
-        self.timer += time_passed
-        self.scheduler.update(self, time_passed)
+        time_step = duration * self.speed
+        self.timer += time_step
+        self.scheduler.update(self, time_step)
         for vehicle in self.vehicles:
             if not vehicle.departed:
-                vehicle.update(time_passed, self)
+                vehicle.update(time_step, self)
+
+        self.belt_front.update(time_step)
+        self.belt_rear.update(time_step)
+
+        if self.scheduler.ops['Connect_LDL_Front'].completed and self.scheduler.ops['Remove_LDL_Front'].start_time is None:
+            if self.scheduler.ops['Offload_Front'].start_time is not None and not self.scheduler.ops['Offload_Front'].completed:
+                self.belt_front.status = 'Unload'
+            elif self.scheduler.ops['Load_Front'].start_time is not None and not self.scheduler.ops['Load_Front'].completed:
+                self.belt_front.status = 'Load'
+            else:
+                self.belt_front.status = 'None'
+        else:
+            self.belt_front.status = 'None'
+        if self.scheduler.ops['Connect_LDL_Rear'].completed and self.scheduler.ops['Remove_LDL_Rear'].start_time is None:
+            if self.scheduler.ops['Offload_Rear'].start_time is not None and not self.scheduler.ops['Offload_Rear'].completed:
+                self.belt_rear.status = 'Unload'
+            elif self.scheduler.ops['Load_Rear'].start_time is not None and not self.scheduler.ops['Load_Rear'].completed:
+                self.belt_rear.status = 'Load'
+            else:
+                self.belt_rear.status = 'None'
+        else:
+            self.belt_rear.status = 'None'
 
     def run(self):
         print("Running...")
@@ -552,6 +574,9 @@ class Simulation:
             self.delay_buttons.append(
                 ButtonDelay("+", (225, op_list_start + i * op_list_margin), (20, 20), operation, font_size=20))
         self.create_vehicles()
+
+        self.belt_front.reset()
+        self.belt_rear.reset()
 
         self.paused = False
         self.pause_menu = False
@@ -1285,6 +1310,66 @@ class Trailer:
                          -90)
 
         self.move(simulation)
+
+
+class Belt:
+    def __init__(self, location):
+        self.bags = []
+        if location == 'Front':
+            self.location = location
+        elif location == 'Rear':
+            self.location = location
+        else:
+            raise ValueError('location must be either Front or Rear')
+        self.status = None
+
+    def update(self, time_step):
+        if self.status == 'Load' or self.status == 'Unload':
+            for bag in self.bags:
+                bag.update(time_step, self.status)
+
+            if not self.bags or (self.bags[-1].location[0] < 840 and self.status == 'Unload'):
+                if self.location == 'Front':
+                    self.bags.append(Bag((920, 830)))
+                else:
+                    self.bags.append(Bag((920, 330)))
+            elif not self.bags or (self.bags[-1].location[0] > 805 and self.status == 'Load'):
+                if self.location == 'Front':
+                    self.bags.append(Bag((725, 830)))
+                else:
+                    self.bags.append(Bag((725, 330)))
+
+        if self.bags and ((self.bags[0].location[0] < 700 and self.status == 'Unload') or (self.bags[0].location[0] > 920 and self.status == 'Load')):
+            self.bags.pop(0)
+
+    def draw(self, screen):
+        for bag in self.bags:
+            bag.draw(screen)
+
+    def reset(self):
+        self.bags = []
+        self.status = None
+
+
+class Bag:
+    def __init__(self, location):
+        self.location = location
+        self.image = pg.image.load(f'assets\\Baggage\\Bag_{np.random.randint(0, 12)}.png').convert_alpha()
+        self.rotation = np.random.randint(-180, 180)
+
+    def update(self, time_step, activity):
+        if activity == 'Unload':
+            self.location = (self.location[0] - 25*time_step, self.location[1])
+        elif activity == 'Load':
+            self.location = (self.location[0] + 25 * time_step, self.location[1])
+
+    def draw(self, screen):
+        rect_surface = pg.Surface(self.image.get_size(), pg.SRCALPHA)
+        rect_surface.blit(self.image, (0, 0))
+        rotated_surface = pg.transform.rotate(rect_surface, -self.rotation)
+        rotated_rect = rotated_surface.get_rect(center=self.location)
+
+        screen.blit(rotated_surface, rotated_rect.topleft)
 
 
 def draw_rotated(image, location, rotation, screen):
