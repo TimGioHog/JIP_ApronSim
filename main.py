@@ -509,29 +509,46 @@ class Simulation:
             if not vehicle.departed:
                 vehicle.update(time_step, self)
 
-        self.belt_front.update(time_step)
-        self.belt_rear.update(time_step)
+        self.belt_front.update(time_step, self)
+        self.belt_rear.update(time_step, self)
 
         if self.scheduler.ops['Connect_LDL_Front'].completed and self.scheduler.ops['Remove_LDL_Front'].start_time is None:
             if self.scheduler.ops['Offload_Front'].start_time is not None and not self.scheduler.ops['Offload_Front'].completed:
-                self.belt_front.status = 'Unload'
+                new_front_status = 'Unload'
             elif self.scheduler.ops['Load_Front'].start_time is not None and not self.scheduler.ops['Load_Front'].completed:
-                self.belt_front.status = 'Load'
+                new_front_status = 'Load'
             else:
-                self.belt_front.status = 'None'
+                new_front_status = None
         else:
-            self.belt_front.status = 'None'
-            self.belt_front.reset()
+            new_front_status = None
         if self.scheduler.ops['Connect_LDL_Rear'].completed and self.scheduler.ops['Remove_LDL_Rear'].start_time is None:
             if self.scheduler.ops['Offload_Rear'].start_time is not None and not self.scheduler.ops['Offload_Rear'].completed:
-                self.belt_rear.status = 'Unload'
+                new_rear_status = 'Unload'
             elif self.scheduler.ops['Load_Rear'].start_time is not None and not self.scheduler.ops['Load_Rear'].completed:
-                self.belt_rear.status = 'Load'
+                new_rear_status = 'Load'
             else:
-                self.belt_rear.status = 'None'
+                new_rear_status = None
         else:
-            self.belt_rear.status = 'None'
-            self.belt_rear.reset()
+            new_rear_status = None
+
+        if new_front_status != self.belt_front.status:
+            if self.belt_front.bags:
+                if not self.belt_front.status.startswith('Finish'):
+                    self.belt_front.status = 'Finish_' + self.belt_front.status
+            elif self.belt_front.delay_counter > 0:
+                self.belt_front.delay_counter -= time_step
+            else:
+                self.belt_front.status = new_front_status
+                self.belt_front.delay_counter = 150
+        if new_rear_status != self.belt_rear.status:
+            if self.belt_rear.bags:
+                if not self.belt_rear.status.startswith('Finish'):
+                    self.belt_rear.status = 'Finish_' + self.belt_rear.status
+            elif self.belt_rear.delay_counter > 0:
+                self.belt_rear.delay_counter -= time_step
+            else:
+                self.belt_rear.status = new_rear_status
+                self.belt_rear.delay_counter = 150
 
     def run(self):
         print("Running...")
@@ -1327,24 +1344,27 @@ class Belt:
         else:
             raise ValueError('location must be either Front or Rear')
         self.status = None
+        self.delay_counter = np.random.randint(150, 200)
 
-    def update(self, time_step):
+    def update(self, time_step, simulation):
+        for bag in self.bags:
+            bag.update(time_step, self.status)
+
         if self.status == 'Load' or self.status == 'Unload':
-            for bag in self.bags:
-                bag.update(time_step, self.status)
-
-            if not self.bags or (self.bags[-1].location[0] < 840 and self.status == 'Unload'):
+            if not self.bags or (self.bags[-1].location[0] < 870 and self.status == 'Unload'):
                 if self.location == 'Front':
                     self.bags.append(Bag((920, 830)))
                 else:
                     self.bags.append(Bag((920, 330)))
-            elif not self.bags or (self.bags[-1].location[0] > 805 and self.status == 'Load'):
+            elif not self.bags or (self.bags[-1].location[0] > 775 and self.status == 'Load'):
                 if self.location == 'Front':
                     self.bags.append(Bag((725, 830)))
                 else:
                     self.bags.append(Bag((725, 330)))
 
-        if self.bags and ((self.bags[0].location[0] < 700 and self.status == 'Unload') or (self.bags[0].location[0] > 920 and self.status == 'Load')):
+        if self.bags and ((self.bags[0].location[0] < 700 and self.status in ['Unload', 'Finish_Unload'] and simulation.new_sim)
+                          or (self.bags[0].location[0] < 725 and self.status in ['Unload', 'Finish_Unload'] and not simulation.new_sim)
+                          or (self.bags[0].location[0] > 920 and self.status in ['Load', 'Finish_Load'])):
             self.bags.pop(0)
 
     def draw(self, screen):
@@ -1363,10 +1383,10 @@ class Bag:
         self.rotation = np.random.randint(-180, 180)
 
     def update(self, time_step, activity):
-        if activity == 'Unload':
-            self.location = (self.location[0] - 25*time_step, self.location[1])
-        elif activity == 'Load':
-            self.location = (self.location[0] + 25 * time_step, self.location[1])
+        if activity == 'Unload' or activity == 'Finish_Unload':
+            self.location = (self.location[0] - 25 * 0.4 * time_step, self.location[1])
+        elif activity == 'Load'or activity == 'Finish_Load':
+            self.location = (self.location[0] + 25 * 0.4 * time_step, self.location[1])
 
     def draw(self, screen):
         rect_surface = pg.Surface(self.image.get_size(), pg.SRCALPHA)
