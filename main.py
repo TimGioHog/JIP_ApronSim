@@ -165,7 +165,7 @@ class Simulation:
 
         self.vehicles = []
         self.create_vehicles()
-        self.employees = [f'Employee_{random.randint(1, 4)}' for i in range(5)]
+        self.employees = [f'Employee_{random.randint(1, 4)}' for _ in range(5)]
 
         self.mesh_surface = pg.Surface((1920, 1080), pg.SRCALPHA)
         for y, row in enumerate(self.mesh):
@@ -521,6 +521,7 @@ class Simulation:
                 self.belt_front.status = 'None'
         else:
             self.belt_front.status = 'None'
+            self.belt_front.reset()
         if self.scheduler.ops['Connect_LDL_Rear'].completed and self.scheduler.ops['Remove_LDL_Rear'].start_time is None:
             if self.scheduler.ops['Offload_Rear'].start_time is not None and not self.scheduler.ops['Offload_Rear'].completed:
                 self.belt_rear.status = 'Unload'
@@ -530,6 +531,7 @@ class Simulation:
                 self.belt_rear.status = 'None'
         else:
             self.belt_rear.status = 'None'
+            self.belt_rear.reset()
 
     def run(self):
         print("Running...")
@@ -552,7 +554,7 @@ class Simulation:
             fps_update_time += frame_duration
             if fps_update_time >= 0.5:
                 self.fps = int(sum(fps_list) / len(fps_list))
-                self.speed_limit = self.fps / 3
+                self.speed_limit = self.fps / 2  # Makes sure there are always two updates per simulated second
                 fps_list = []
                 fps_update_time = 0
             if self.restart:
@@ -895,7 +897,7 @@ class Vehicle:
         else:
             self.walking = False
 
-        # Mesh initialisation
+        # Mesh initialization
         if self.walking:
             mesh_df = pd.read_excel("assets/Meshes/Mesh_Inspection.xlsx", header=None)
             self.mesh = mesh_df.to_numpy()
@@ -931,13 +933,11 @@ class Vehicle:
                 # simulation.screen.blit(small_font.render(str(round(heading, 2)), True, (0, 255, 0)), (self.location[0], self.location[1]))
 
                 # i = -1
+
                 for truck in simulation.vehicles:
                     if not truck == self and len(truck.path) >= 1:
                         # i += 1
                         truck_n_trailers = [truck] + truck.trailers
-                        # angle_to_vehicle = 0
-                        # distance = 0
-                        # angle_difference = 0
                         for vehicle in truck_n_trailers:
                             distance = np.sqrt((vehicle.location[0] - self.location[0]) ** 2 + (vehicle.location[1] - self.location[1]) ** 2)
 
@@ -949,7 +949,6 @@ class Vehicle:
                                     or (-25 < angle_difference < 25 and distance < 300 and not truck.stopped)):
                                 stop = True
                                 break
-                        # simulation.screen.blit(small_font.render(str(round(angle_to_vehicle, 2)), True, (255, 0, 0)), (self.location[0], self.location[1] + 20 + (60*i)))
                         # simulation.screen.blit(small_font.render(str(round(distance, 2)), True, (0, 100, 255)), (self.location[0], self.location[1] + 40 + (60*i)))
                         # simulation.screen.blit(small_font.render(str(round(angle_difference, 2)), True, (0, 0, 0)), (self.location[0], self.location[1] + 60 + (60*i)))
                 if stop:
@@ -1050,11 +1049,11 @@ class Vehicle:
                     else:
                         self.create_gate()
                 elif crossed_gate:
-                    self.finish_path(simulation)
+                    self.finish_path()
             else:  # Sim speed > speed limit
                 if self.snap_list is not None and self.goals_completed < len(self.snap_list):
                     self.snap_list[self.goals_completed] = True
-                self.finish_path(simulation)
+                self.finish_path()
         else:  # No path
             if len(self.trailers) > 0:
                 for trailer in self.trailers:
@@ -1086,7 +1085,7 @@ class Vehicle:
             # Snap due to skipping of movement
             if self.goals_completed < len(self.snap_list):
                 self.snap_list[self.goals_completed] = True
-            self.finish_path(simulation)
+            self.finish_path()
 
         # Find path to goal
         else:
@@ -1107,7 +1106,7 @@ class Vehicle:
             else:
                 self.create_gate()
 
-    def finish_path(self, simulation):
+    def finish_path(self):
         self.path = []
         self.speed = 0
         if self.snap_list[self.goals_completed]:
@@ -1124,6 +1123,12 @@ class Vehicle:
             self.departed = True
 
         for trailer in self.trailers:
+            if trailer.connected:
+                if trailer.number == 0:
+                    prev_trailer = self
+                else:
+                    prev_trailer = self.trailers[trailer.number - 1]
+                trailer.update(prev_trailer, 0, self.speed)
             if self.start_ops[0].name.startswith('Offload'):
                 if self.goals_completed == 1:
                     trailer.connected = False
@@ -1390,7 +1395,7 @@ def heading_angle(vehicle_1, vehicle_2):
         heading = vehicle_1.rotation - 180 if vehicle_1.rotation > 0 else vehicle_1.rotation + 180
     else:
         heading = vehicle_1.rotation
-    angle_to_vehicle = np.arctan2((vehicle_1.location[1] - vehicle_2.location[1]), (vehicle_1.location[0] - vehicle_2.location[0]))
+    angle_to_vehicle = np.arctan2((vehicle_2.location[1] - vehicle_1.location[1]), (vehicle_2.location[0] - vehicle_1.location[0]))
     angle_to_vehicle = np.rad2deg(angle_to_vehicle)
     angle_diff = heading - angle_to_vehicle
     if angle_diff > 180:
