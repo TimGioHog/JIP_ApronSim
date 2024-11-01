@@ -3,23 +3,44 @@ import heapq
 
 
 def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int, straighten=15, reverse_out=(0, 0), full_reverse=False):
+    """
+    Generates a smooth astar path using the given start and goal coordinates.
+    :param mesh: array of 1s and 0s, where 0s are walls
+    :param start: (x,y) coordinates of the start point
+    :param goal: (x,y) coordinates of the goal point)
+    :param goal_rotation: rotation angle of the goal point
+    :param straighten: number of steps straight to goal, to straighten the vehicle to the goal rotation
+    :param reverse_out: add a point straight at the start of the path (distance, rotation)
+    :param full_reverse: path is done in reverse
+    :return: path, [(x,y), ...]
+    """
+    # Convert to tuple if needed
     if type(start) is list:
         start = (start[0], start[1])
 
+    # Check for a service road start or goal
     if start == (655, 1370):
         service_start = True
         start = (655, 1020)
     else:
         service_start = False
-
     if goal == (535, 1370):
         service_end = True
         goal = (535, 1020)
     else:
         service_end = False
 
+    # Convert start and goal coordinates to y, x grid
     m_start = (int(start[1] / 10) + 20, int(start[0] / 10))
     m_goal = (int(goal[1] / 10) + 20, int(goal[0] / 10))
+
+    # Check start and goal
+    if 0 > m_start[0] >= mesh.shape[0] or 0 > m_start[1] >= mesh.shape[1]:
+        raise ValueError(f'Pathfinding Error: inserted start value invalid. start = {m_start}')
+    if 0 > m_goal[0] >= mesh.shape[0] or 0 > m_goal[1] >= mesh.shape[1]:
+        raise ValueError(f'Pathfinding Error: inserted goal value invalid. goal = {m_goal}')
+
+    # Find start point for straightening
     if goal_rotation is None:
         straighten = 0
         dx, dy = 0, 0
@@ -33,32 +54,35 @@ def smooth_astar(mesh: np.ndarray, start: tuple, goal: tuple, goal_rotation: int
         if not service_end:
             m_goal = (m_goal[0] + dy, m_goal[1] + dx)
 
-    if 0 > m_start[0] >= mesh.shape[0] or 0 > m_start[1] >= mesh.shape[1]:
-        raise ValueError(f'Pathfinding Error: inserted start value invalid. start = {m_start}')
-    if 0 > m_goal[0] >= mesh.shape[0] or 0 > m_goal[1] >= mesh.shape[1]:
-        raise ValueError(f'Pathfinding Error: inserted goal value invalid. goal = {m_goal}')
-
     path = astar(mesh, m_start, m_goal)
     if len(path) == 1:  # No path found
         return None
+
+    # Smooth path backwards
     smoothed_path = los_smooth_bwrd(path, mesh)
 
+    # Add point to start if reversing out
     if reverse_out[0] > 0:
         smoothed_path.insert(1, (m_start[0] + round(reverse_out[0] * np.sin(np.deg2rad(reverse_out[1]))), m_start[1] + round(reverse_out[0] * np.cos(np.deg2rad(reverse_out[1])))))
 
+    # Add service road point to end of path
     if service_end:
         smoothed_path.append((157, 53))
     else:
+        # Add straightening points
         for i in np.arange(1, straighten+1):
             smoothed_path.append((m_goal[0] - (i / straighten) * dy, m_goal[1] - (i / straighten) * dx))
 
+    # Add service road point to start
     if service_start:
         smoothed_path.insert(0, (157, 65))
 
+    # Convert to x, y coordinates
     final_path = []
     for point in smoothed_path:
         final_path.append((int(point[1] * 10 + 5), int((point[0] - 20) * 10 + 5)))
 
+    # Skip start point
     return final_path[1:]
 
 
@@ -74,17 +98,15 @@ def astar(mesh: np.ndarray, start: tuple, goal: tuple):
     :type start: tuple
     :param goal: (y, x)
     :type goal: tuple
-    :return: path in form of [(y, x), ... (y,x)]
-    :rtype: list, [goal] if no path can be found
+    :return: path, [(y, x), ... (y,x)]
+    :rtype: list, Note: [goal] if no path can be found
     """
-    # Directions: up, down, left, right
+    # up, down, left, right
     neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
-    # Priority queue for A*
     queue = []
     heapq.heappush(queue, (0, start))
 
-    # Dictionaries to store cost and path information
     came_from = {start: None}
     cost_so_far = {start: 0}
 
@@ -97,12 +119,10 @@ def astar(mesh: np.ndarray, start: tuple, goal: tuple):
         for dx, dy in neighbors:
             next_node = (current[0] + dx, current[1] + dy)
 
-            # Check if the next move is within bounds and not an obstacle
             if 0 <= next_node[0] < mesh.shape[0] and 0 <= next_node[1] < mesh.shape[1]:
-                if mesh[next_node[0], next_node[1]] == 1:  # 1 means it's traversable
+                if mesh[next_node[0], next_node[1]] == 1:
                     new_cost = cost_so_far[current] + 1
 
-                    # If this path to next_node is better than previous ones
                     if next_node not in cost_so_far or new_cost < cost_so_far[next_node]:
                         cost_so_far[next_node] = new_cost
                         priority = new_cost + heuristic(goal, next_node)
@@ -116,7 +136,7 @@ def astar(mesh: np.ndarray, start: tuple, goal: tuple):
         path.append(current)
         current = came_from.get(current)
 
-    path.reverse()  # Reverse the path to get it from start to goal
+    path.reverse()
     return path
 
 
