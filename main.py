@@ -460,8 +460,8 @@ class Simulation:
         else:
             rect_surface = pg.Surface((320, 60), pg.SRCALPHA)
             rect_surface.fill(pg.Color(0, 0, 0, 150))
-            # self.screen.blit(rect_surface, (800, 1020))
-            # self.button_sim_type_2.draw(self.screen, self.new_sim)
+            self.screen.blit(rect_surface, (800, 1020))
+            self.button_sim_type_2.draw(self.screen, self.new_sim)
         pg.display.flip()
 
     def event_handler(self):
